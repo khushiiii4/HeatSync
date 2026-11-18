@@ -1,5 +1,6 @@
 server:
-  port: 8080
+  # GATEWAY_PORT lets a machine where 8080 is taken pick another port; the default is unchanged.
+  port: ${GATEWAY_PORT:8080}
 
 spring:
   application:

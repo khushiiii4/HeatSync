@@ -63,13 +63,15 @@ Or during development: `.\mvnw.cmd -pl eureka-server spring-boot:run`. Dashboard
 
 ## API gateway
 
-Spring Cloud Gateway 4.3.5 (WebFlux), port 8080, the only public entry point. Start Eureka first, then:
+Spring Cloud Gateway 4.3.5 (WebFlux), the only public entry point. It listens on `GATEWAY_PORT` (default 8080). Start Eureka first, then:
 
-```n java -jar api-gateway/target/api-gateway-0.1.0-SNAPSHOT.jar
-```n
+```
+java -jar api-gateway/target/api-gateway-0.1.0-SNAPSHOT.jar
+```
+
 Routes (`/api/auth`, `/api/topology`, `/api/sim`, `/api/telemetry`, `/api/alerts`, `/api/workloads`, `/api/scheduler`, `/api/cooling`) go to `lb://` services through Eureka. `/internal/**` is not routed. `GET /api/platform/services` is served by the gateway. CORS allows `http://localhost:5173` (override with `thermogrid.cors.allowed-origins`). Security is off (`thermogrid.security.enabled=false`) until phase 9.
 
-If port 8080 is taken (on this machine `AgentService.exe` holds it), find the owner with `Get-NetTCPConnection -LocalPort 8080 -State Listen`; for a temporary run use `--server.port=18080` rather than editing the config.
+**Choosing the gateway port.** Set `GATEWAY_PORT` in the environment or in `.env` (see `.env.example`); it feeds `server.port` in `api-gateway/application.yml` (`${GATEWAY_PORT:8080}`). `scripts/start-all.sh` (and the PowerShell twin) reads it, passes it to the gateway, and checks that the port is free before starting anything: if it is taken, the script stops with an error and nothing is killed. Example: `GATEWAY_PORT=18080 scripts/start-all.sh`, then `http://localhost:18080/api/platform/services`. If 8080 is taken (on one development machine `AgentService.exe` holds it), find the owner with `Get-NetTCPConnection -LocalPort 8080 -State Listen`. Running the jar by hand: `GATEWAY_PORT=18080 java -jar ...` or `--server.port=18080`.
 
 ## Topology service
 
