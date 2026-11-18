@@ -1,6 +1,6 @@
 # Status register
 
-Mirrors the checklist in plan section 15.9. An item is Done only when its listed test was run and passed (plan rule 10). Last updated: 2026-11-18, end of Bundle 2.3.
+Mirrors the checklist in plan section 15.9. An item is Done only when its listed test was run and passed (plan rule 10). Last updated: 2026-11-18, end of Phase 3.
 
 ## Phase 0: Environment and repository setup
 
@@ -43,7 +43,23 @@ Phase 0 is not closed: the branch has not been pushed or merged, and the full-te
 | simulator-service: POST /api/sim/flood | Deferred | Load-test work (Phase 11) |
 | Phase 2 acceptance: readings on the exchange, temperatures settle, an injected failure changes the readings, re-seeding adds no duplicates | Done, with one gap | Each part was tested or observed. The "stable for 10 minutes" run was not performed |
 
-## Phases 3 to 13
+## Phase 3: Telemetry, prediction and alerts
+
+| Item | Status | Evidence / note |
+|------|--------|-----------------|
+| telemetry-service: telemetry_db schema (4 tables, keys, indexes) | Done | Schema test on H2; `SHOW CREATE TABLE` on the real MySQL matches the plan, with one deviation (unit_health VARCHAR(8), D-029) |
+| RabbitMQ ingestion with durable queues, bounded retry and dead-lettering | Done | Topology and retry rules unit tested. Runtime: 20 messages per tick consumed and stored; a malformed message and an out-of-range one both reached `thermogrid.dlq` at once. The retry path for a database failure was unit tested only |
+| Idempotent storage, out-of-order handling, concurrency | Done | Tests with 8 to 16 threads on one rack. Runtime: duplicate and out-of-order messages on the real broker changed nothing |
+| ForecastEngine (damped Holt) and RiskClassifier (hysteresis) | Done | 9 + 12 pure unit tests with fixed series and every boundary |
+| Alert service and thermal.alert.* events | Done | Lifecycle, one ACTIVE per rack, payloads and routing keys tested. Runtime: raised, lowered and cleared events seen on a temporary queue |
+| Stale-sensor watchdog | Done | 10 s boundary and recovery tested with a movable clock. Runtime: racks turned STALE about 12 s after the simulator stopped, frozen, and returned to OK after it restarted |
+| Retention job | Done | Cutoff, batching and ACTIVE-alert protection tested with a movable clock. Not run against the real database (6 hours) |
+| REST endpoints (latest, history, zones, alerts, internal) | Done | 10 API tests; all five endpoints and the 400 and 404 cases called on port 8084 |
+| docs/calibration.md | Done | Constants, fixed series, scenario 2 and 3 measurements. No constant was changed |
+| Phase 3 acceptance: degrading Z2 produces a PREDICTED WARNING alert and event | Done | Runtime: COOLING_DEGRADED 0.25 on Z2 gave a PREDICTED WARNING on R23 at 32.04 C (forecast 34.01), 25 ticks (50 s) before a rack observed 34 C. Event seen on `thermal.alert.#` |
+| Telemetry reached through the gateway | Not verified | Gateway not started; the port 8080 conflict is unchanged |
+
+## Phases 4 to 13
 
 All Pending. Nothing from these phases has been started.
 
