@@ -6,7 +6,7 @@ ThermoGrid is a software-simulated data center (4 cooling zones, 16 racks) built
 
 ## Current status
 
-Phases 0 to 5 are implemented: infrastructure, contracts, Eureka and the API gateway, topology, the simulator, telemetry with forecasting and alerts, the workload service, and the scheduler (thermal-aware placement, migration, reconcile and HOLD mode). Not built yet: cooling controller, authentication, frontend. Start services consumers-first (scheduler before the simulator and workload services). See [docs/status.md](docs/status.md) for evidence per item and [docs/decision-log.md](docs/decision-log.md) for decisions.
+Phases 0 to 6 are implemented: infrastructure, contracts, Eureka and the API gateway, topology, the simulator, telemetry with forecasting and alerts, the workload service, the scheduler (thermal-aware placement, migration, reconcile and HOLD mode) and the cooling controller (proportional control, fault detection, fail-safe, modelled energy). Not built yet: authentication, frontend, Phase 7 messaging hardening. Start services consumers-first (scheduler and cooling controller before the simulator and workload services). See [docs/status.md](docs/status.md) for evidence per item and [docs/decision-log.md](docs/decision-log.md) for decisions.
 
 ## Modules
 

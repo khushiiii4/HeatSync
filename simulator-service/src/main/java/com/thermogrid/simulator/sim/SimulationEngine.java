@@ -46,22 +46,30 @@ public class SimulationEngine {
     private final FailureSource failures;
     private final TickPublisher publisher;
     private final LoadSource loads;
+    private final CoolingSource cooling;
 
     @Autowired
     public SimulationEngine(RackGrid grid, PhysicsModel model, SimState state, Clock clock, FailureRegistry failures,
-                            ObjectProvider<TickPublisher> publisher, ObjectProvider<LoadSource> loads) {
+                            ObjectProvider<TickPublisher> publisher, ObjectProvider<LoadSource> loads,
+                            ObjectProvider<CoolingSource> cooling) {
         this(grid, model, state, clock, failures, publisher.getIfAvailable(() -> TickPublisher.NONE),
-                loads.getIfAvailable(() -> LoadSource.STATIC));
+                loads.getIfAvailable(() -> LoadSource.STATIC), cooling.getIfAvailable(() -> CoolingSource.NONE));
     }
 
     public SimulationEngine(RackGrid grid, PhysicsModel model, SimState state, Clock clock, FailureSource failures,
                             TickPublisher publisher) {
-        this(grid, model, state, clock, failures, publisher, LoadSource.STATIC);
+        this(grid, model, state, clock, failures, publisher, LoadSource.STATIC, CoolingSource.NONE);
     }
 
     public SimulationEngine(RackGrid grid, PhysicsModel model, SimState state, Clock clock, FailureSource failures,
                             TickPublisher publisher, LoadSource loads) {
+        this(grid, model, state, clock, failures, publisher, loads, CoolingSource.NONE);
+    }
+
+    public SimulationEngine(RackGrid grid, PhysicsModel model, SimState state, Clock clock, FailureSource failures,
+                            TickPublisher publisher, LoadSource loads, CoolingSource cooling) {
         this.loads = loads;
+        this.cooling = cooling;
         this.grid = grid;
         this.model = model;
         this.state = state;
@@ -138,7 +146,8 @@ public class SimulationEngine {
         Map<String, ZoneState> out = new LinkedHashMap<>();
         for (var e : prev.zones().entrySet()) {
             String zoneId = e.getKey();
-            double outputPct = e.getValue().outputPct();
+            // Fan output commanded by the cooling controller (held at its last value if the controller goes quiet).
+            double outputPct = cooling.outputPct(zoneId).orElse(e.getValue().outputPct());
             boolean fault = false;
             Double degraded = null;
             for (FailureRecord f : active) {

@@ -1,6 +1,6 @@
 # Status register
 
-Mirrors the checklist in plan section 15.9. An item is Done only when its listed test was run and passed (plan rule 10). Last updated: 2026-11-18, end of Phase 5.
+Mirrors the checklist in plan section 15.9. An item is Done only when its listed test was run and passed (plan rule 10). Last updated: 2026-11-18, end of Phase 6.
 
 ## Phase 0: Environment and repository setup
 
@@ -40,7 +40,7 @@ Phase 0 is not closed: the branch has not been pushed or merged, and the full-te
 | simulator-service: FailureRegistry, four failure types, failure and control endpoints (Bundle 2.3) | Done | Validation, expiry, clearing, history retention, RESET and each failure's effect are unit and API tested. Runtime: a cooling failure on Z2 gave FAULT, fan 0 and rising temperatures; clearing restored OK and 40 |
 | simulator-service: RabbitMQ publishing of rack and zone readings (Bundle 2.3) | Done | 16 rack + 4 zone events per tick on `thermogrid.events`, seen through a temporary queue bound to `telemetry.#` (deleted afterwards). Broker-unreachable behaviour is unit tested and was also run once against a closed port: ticks continued, one warning per cooldown |
 | simulator-service: listeners for workload.assigned, workload.removed | Done in Phase 4 | See Phase 4 below |
-| simulator-service: listener for cooling.unit.state | Deferred | No queue or consumer until Phase 6 |
+| simulator-service: listener for cooling.unit.state | Done in Phase 6 | See Phase 6 below |
 | simulator-service: POST /api/sim/flood | Deferred | Load-test work (Phase 11) |
 | Phase 2 acceptance: readings on the exchange, temperatures settle, an injected failure changes the readings, re-seeding adds no duplicates | Done, with one gap | Each part was tested or observed. The "stable for 10 minutes" run was not performed |
 
@@ -115,6 +115,33 @@ Scenario runs (real MySQL, RabbitMQ, Eureka, topology, simulator, telemetry, wor
 - **Scenario 3 and 4.** `COOLING_DEGRADED` 0.25 on Z2. The first WARNING (R22, R23) came 40 s after injection. The scheduler then made 10 THERMAL_WARNING moves in 80 s, at most 2 per reconcile cycle (they appear as pairs within 0.1 s, one pair per 5 s cycle), LOW priority first on each rack (R23: LOW 30, LOW 15, then MEDIUM 20; R22: LOW 20, LOW 15, then MEDIUM 30), always into other zones with headroom (largest rack load afterwards 65 units, cap 85). No workload was moved twice (checked against the 120 s cooldown). Z2 peaked at about 32.1 C observed and 33.9 C forecast and never reached 34 C observed. Z2 load fell from 330 to 115 units, temperatures stopped rising about 70 s after injection and then fell. Clearing the degradation was done after that.
 - **HOLD.** Telemetry was killed: the scheduler reported HOLD about 3 s later. Two workloads submitted during HOLD were placed with mode HOLD decisions on utilisation only (scores 0.35 and 0.45). A manually published cooling FAULT for Z3 was stored but caused no migration. When telemetry restarted the scheduler returned to NORMAL after 18 s (startup time of telemetry) and drained Z3: 11 COOLING_FAILURE moves, all APPLIED, none into Z3.
 - **Demo layout.** The 720-unit layout gives the intended thermal scenario: Z2 is warm but stable, and a 0.25 degradation pushes forecasts over 32 C within a minute. No constants were changed.
+
+## Phase 6: Cooling controller and closed-loop integration
+
+| Item | Status | Evidence / note |
+|------|--------|-----------------|
+| cooling-controller-service on 8087, Eureka lease 3 s / 9 s, `cooling_db`, one unit per zone | Done | Runtime: registered, 4 units seeded from topology; `SHOW CREATE TABLE` for `cooling_unit` and `cooling_action` matches plan section 7 (columns, key, `(zone_id, created_at)` index) |
+| ProportionalController, EWMA and slope, floors, boosts, hold times, clamping, slew | Done | 25 pure table-driven tests in `ControlLawTest`: worked values for ewma 27.0 / slope 1.0 / hot 32.0 / raw 107, floor 30 and 60, boosts 50, 70, 100, 60 s and 20 s holds with exact boundaries, escalation, CRITICAL lowered to WARNING, 10-point slew up and down |
+| FaultDetector | Done | 2 FAULT to confirm, 3 OK to recover, DEGRADED counts toward neither. Runtime: FAULT confirmed 4.1 s after the injection (2 readings), recovered 6.1 s after clearing (3 readings) |
+| Fail-safe watchdog | Done | Tests at 9.999 s and 10 s, reported once, 3 fresh readings to leave, stale, duplicate and out-of-order readings do not count. Runtime: simulator stopped, all four units entered FAILSAFE at 80 about 10 s later with one `cooling_action` each; after the simulator restarted they returned to AUTO after 12 s |
+| Energy model | Done | Tests: 0.5, 1.0, 1.872 and 4.5 kW at 0, 50, 70, 100 percent, integration over time. Runtime summary: 2.81 kW against a 7.49 kW baseline (62.5 percent), labelled modelled |
+| RabbitMQ: consume zone readings and alerts, publish cooling.unit.state | Done | Durable queues `q.cooling.zone-readings` (TTL 30 s) and `q.cooling.alerts` (TTL 60 s), dead-lettered. Tests: raw message mapping, duplicates, malformed messages, saved before published (checked at send time), heartbeat with rising seq, broker down then up |
+| Persistence | Done | Tests: unit state survives a restart, seq never goes backwards, 24 h retention |
+| REST: units, actions, summary, manual mode | Done | 11 API and event tests; all four called at runtime (manual mode only in tests) |
+| Simulator consumes cooling.unit.state | Done | 10 new tests (output applied to the right zone on the next tick, duplicates and out-of-order dropped, restart accepted, clamping, last output held, health not applied, failure injection unchanged, listener and malformed message). 122 simulator tests pass |
+| Scheduler uses cooling state | Done | 5 new tests: FAULT drains LOW first and is never a destination, confirmed recovery restores placement, stale / duplicate / out-of-order messages, HOLD and move limits still hold. 86 scheduler tests pass |
+| Singleton protection | Done | 3 unit tests; runtime lock acquired. A second controller was not started |
+| Phase 6 acceptance: scenarios 2, 5 and 6 | Done, with the differences below | See the runs below |
+| Event delivery limits | Documented | A lost change event is repaired by the next heartbeat (at most 5 s); alert levels are in memory (D-062, D-063) |
+| Controller and RabbitMQ failure at runtime | Not verified | Broker failure is tested with a mocked broker only; the broker was never stopped. The manual-mode endpoint was not called against the live service |
+| Cooling reached through the gateway | Not verified | Gateway not started; the port 8080 conflict is unchanged |
+
+Live runs (real MySQL, RabbitMQ, Eureka, topology, simulator, telemetry, workload, scheduler and cooling controller, demo seed of 720 units):
+
+- **Scenario 2, degraded cooling.** `COOLING_DEGRADED` 0.25 on Z2. Output rose from 43 to 77 within 10 s and to 94 to 100 within about a minute (slew of at most 10 points per reading), and the simulator's zone output followed it. Z2 plateaued at 31.2 to 31.4 C with a WATCH alert and no WARNING, so **no migration was needed**: with the controller running, cooling alone contained the degradation (without it, Phase 5 measured 32 C observed and 34 C forecast and ten migrations). To check migration with cooling events flowing, a `HEAT_SPIKE` of 8 kW was added on R23: Z2 reached 33.8 C with output at 100, WARNING was raised, and the scheduler made 4 THERMAL_WARNING moves off R23 (two cycles) while Z2 fell back to about 32 C. Cooling events reached the scheduler (zone state rows) and the simulator.
+- **Scenario 5, cooling adjustment.** After both failures were cleared the output stayed at 70 while the alert level fell, the `hold_until` showed a 20 s hold, it was released to 60 and 30, and it settled at 39 to 47 percent with the zone at 26.3 to 26.9 C. Over 500 recorded actions the largest AUTO step was 10 points and the smallest 2. **Not observed:** a boost that is actually larger than the temperature term (WATCH 50, WARNING 70, CRITICAL 100 acting alone); at 30 C and above the raw term already exceeds the boosts, so those paths are covered by unit tests only. A 60 s CRITICAL hold was not observed live.
+- **Scenario 6, cooling failure in Z3.** `COOLING_FAILURE` on Z3: FAULT confirmed 4.1 s later, the floor of all units rose to 60 and healthy zones climbed to 60 in 10-point steps, the scheduler stored Z3 as FAULT within a second and made 8 COOLING_FAILURE moves in two cycles (4 per cycle; LOW jobs first, then MEDIUM, then HIGH) emptying Z3, none into Z3. A job submitted afterwards went to R41. Z3 racks stayed at 25.6 to 26.0 C because they were drained at once. After clearing, Z3 and the scheduler showed OK and all floors returned to 30 after 6.1 s (3 OK readings). The plan's expectation of Z3 temperatures peaking near 30 C was not reproduced because the drain completed before the racks warmed.
+- **Controller behaviour at steady state.** The output moves by 2 to 5 points around the setpoint every few seconds (about 585 `cooling_action` rows in roughly 25 minutes); this is the proportional law reacting to noise and is within the 24 h retention. No constants were changed.
 
 ## Optional (plan section 2 cut list and 15.5)
 
