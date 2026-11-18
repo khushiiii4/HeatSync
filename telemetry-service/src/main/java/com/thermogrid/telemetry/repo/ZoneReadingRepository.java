@@ -16,8 +16,11 @@ public interface ZoneReadingRepository extends JpaRepository<ZoneReading, Long> 
     long countByZoneId(String zoneId);
 
     /** The newest reading of every zone, ordered by zone id. */
-    @Query("select z from ZoneReading z where z.recordedAt = "
-            + "(select max(z2.recordedAt) from ZoneReading z2 where z2.zoneId = z.zoneId) order by z.zoneId")
+    // Grouped max instead of a correlated subquery: the group-by is answered from the unique (zone_id, recorded_at)
+    // index, while the correlated form walked every stored reading (about 15 s with six hours of data, which the
+    // gateway's 5 s timeout turned into a 503). Found by the Phase 10 end-to-end run.
+    @Query("select z from ZoneReading z where (z.zoneId, z.recordedAt) in "
+            + "(select z2.zoneId, max(z2.recordedAt) from ZoneReading z2 group by z2.zoneId) order by z.zoneId")
     List<ZoneReading> findLatestPerZone();
 
     @Query("select z.id from ZoneReading z where z.recordedAt < :cutoff order by z.id")

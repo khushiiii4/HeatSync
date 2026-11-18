@@ -1,6 +1,6 @@
 # Status register
 
-Mirrors the checklist in plan section 15.9. An item is Done only when its listed test was run and passed (plan rule 10). Last updated: 2026-11-19, Phase 9 (authentication and security).
+Mirrors the checklist in plan section 15.9. An item is Done only when its listed test was run and passed (plan rule 10). Last updated: 2026-11-19, Phase 10 (integration testing).
 
 ## Phase 0: Environment and repository setup
 
@@ -236,3 +236,19 @@ Source: architecture plan sections 8.1, 9.6 and roadmap Phase 9 (decisions D-084
 | Phase 8 dashboard after login | Done | The browser run loaded the Overview, Workloads and Control Room as each role with live data and no page errors; the service strip shows Auth healthy |
 
 Gaps and limits: login has no rate limiting or lockout; tokens cannot be revoked before the 8-hour expiry and there is no refresh token; the JWT is in localStorage (accepted for the lab, plan 9.6); traffic is plain HTTP; CORS does not allow `PATCH` and no endpoint uses it; the full scripted degrade and fail scenarios (`frontend/scripts/scenario.mjs`) were not re-run after authentication was added (a Z2 degradation injected as OPERATOR through the API produced a predicted alert); the PowerShell start script was not run for real, only its dry run; the Phase 8 screenshots in `docs/screenshots/` predate authentication; HTTPS and Docker or nginx packaging remain Phase 12.
+
+## Phase 10: Integration testing
+
+Source: plan section 12 and roadmap Phase 10 (decisions D-091, D-092). Full detail and the not-run list are in `docs/testing.md`.
+
+| Item | Status | Evidence / note |
+|------|--------|-----------------|
+| Full Maven verification | Done | `./mvnw -B verify`: BUILD SUCCESS, 544 tests, 0 failures, 15 skipped (live-broker tests). Not repeated after the one query fix; the two affected test classes were re-run and pass |
+| Live-broker tests (I-04, I-05, I-06 and related) | Done | 15 tests (4 simulator, 5 telemetry, 4 scheduler, 2 cooling) passed against a throwaway RabbitMQ container, removed afterwards |
+| Frontend tests and build | Done | 64 tests passed; `npm run build` succeeded |
+| `scripts/e2e.sh` through the gateway | Done | 38 passed, 0 failed (login, 401/403/404 cases, internal token, route prefixes, validation, placement flow) |
+| Defect found by e2e: `/api/telemetry/zones/latest` about 15 s, gateway 503 | Fixed | Query changed (D-091); now about 0.05 s; e2e 38/38 |
+| `postman/thermogrid.postman_collection.json` (25 requests) and `scripts/demo.http` | Written, not run | No Newman or REST client here; collection parsed as valid JSON only |
+| `docs/testing.md` | Done | Real results, not-run list and deviations |
+| Scenarios 6 to 9, scaling (I-07), instance stop (I-08), k6 and flood | Not run | Phases 11 and 12 |
+| Branch merged | Pending | Local commit only; not pushed |

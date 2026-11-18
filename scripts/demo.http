@@ -1,0 +1,112 @@
+### ThermoGrid demo requests (VS Code "REST Client" / IntelliJ HTTP Client). Plan phase 10.
+### No secret is stored in this file: passwords come from your environment (SEED_*_PASSWORD from .env).
+### Change @gateway if you set GATEWAY_PORT (for example http://localhost:18080).
+@gateway = http://localhost:8080
+@viewerPassword = {{$processEnv SEED_VIEWER_PASSWORD}}
+@operatorPassword = {{$processEnv SEED_OPERATOR_PASSWORD}}
+@adminPassword = {{$processEnv SEED_ADMIN_PASSWORD}}
+
+### 1. Login as ADMIN (token used by the requests below)
+# @name loginAdmin
+POST {{gateway}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "admin", "password": "{{adminPassword}}" }
+
+###
+@adminToken = {{loginAdmin.response.body.token}}
+
+### 2. Who am I
+GET {{gateway}}/api/auth/me
+Authorization: Bearer {{adminToken}}
+
+### 3. Topology (4 zones, 16 racks)
+GET {{gateway}}/api/topology
+Authorization: Bearer {{adminToken}}
+
+### 4. Seed the demo workloads (ADMIN)
+POST {{gateway}}/api/workloads/seed-demo
+Authorization: Bearer {{adminToken}}
+
+### 5. Latest rack telemetry
+GET {{gateway}}/api/telemetry/racks/latest
+Authorization: Bearer {{adminToken}}
+
+### 6. Active alerts
+GET {{gateway}}/api/alerts?state=ACTIVE&limit=50
+Authorization: Bearer {{adminToken}}
+
+### 7. Submit a workload (OPERATOR or ADMIN)
+POST {{gateway}}/api/workloads
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{ "name": "batch-etl-demo", "cpuDemand": 30, "priority": "LOW" }
+
+### 8. Scheduler status and recent decisions
+GET {{gateway}}/api/scheduler/status
+Authorization: Bearer {{adminToken}}
+
+###
+GET {{gateway}}/api/scheduler/decisions?limit=20
+Authorization: Bearer {{adminToken}}
+
+### 9. Cooling units
+GET {{gateway}}/api/cooling/units
+Authorization: Bearer {{adminToken}}
+
+### 10. Scenario 2: degrade cooling in Z2 (efficiency 0.25)
+POST {{gateway}}/api/sim/failures
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{ "type": "COOLING_DEGRADED", "targetId": "Z2", "param": 0.25, "durationSec": 0 }
+
+### 11. Active failures (copy an id for the DELETE below)
+GET {{gateway}}/api/sim/failures?active=true
+Authorization: Bearer {{adminToken}}
+
+### 12. Clear a failure (replace 1 with the id from step 11)
+DELETE {{gateway}}/api/sim/failures/1
+Authorization: Bearer {{adminToken}}
+
+### 13. Scenario 6: fail the Z3 cooling unit
+POST {{gateway}}/api/sim/failures
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{ "type": "COOLING_FAILURE", "targetId": "Z3", "durationSec": 0 }
+
+### 14. Platform status (which services are UP)
+GET {{gateway}}/api/platform/services
+Authorization: Bearer {{adminToken}}
+
+### 15. Reset the simulation between runs (ADMIN)
+POST {{gateway}}/api/sim/control
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{ "action": "RESET" }
+
+### --- Security demonstrations ---
+
+### S-01 No token -> 401
+GET {{gateway}}/api/topology
+
+### S-03 VIEWER cannot submit -> 403 (login first, then the POST)
+# @name loginViewer
+POST {{gateway}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "viewer", "password": "{{viewerPassword}}" }
+
+###
+POST {{gateway}}/api/workloads
+Authorization: Bearer {{loginViewer.response.body.token}}
+Content-Type: application/json
+
+{ "name": "denied", "cpuDemand": 10, "priority": "LOW" }
+
+### S-07 /internal is never routed by the gateway -> 404
+GET {{gateway}}/internal/topology
+Authorization: Bearer {{adminToken}}

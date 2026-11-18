@@ -1,0 +1,850 @@
+{
+  "info": {
+    "name": "ThermoGrid gateway tests",
+    "description": "Phase 10. Run the folders in order with the Collection Runner. Set gateway, viewerPassword, operatorPassword and adminPassword in your local environment. No secret is stored in this file.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "gateway",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "viewerPassword",
+      "value": ""
+    },
+    {
+      "key": "operatorPassword",
+      "value": ""
+    },
+    {
+      "key": "adminPassword",
+      "value": ""
+    },
+    {
+      "key": "viewerToken",
+      "value": ""
+    },
+    {
+      "key": "operatorToken",
+      "value": ""
+    },
+    {
+      "key": "adminToken",
+      "value": ""
+    },
+    {
+      "key": "workloadId",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "1 Authentication",
+      "item": [
+        {
+          "name": "Login viewer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.collectionVariables.set(\"viewerToken\", pm.response.json().token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": "{{gateway}}/api/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"username\":\"viewer\",\"password\":\"{{viewerPassword}}\"}"
+            }
+          }
+        },
+        {
+          "name": "Login operator",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.collectionVariables.set(\"operatorToken\", pm.response.json().token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": "{{gateway}}/api/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"username\":\"operator\",\"password\":\"{{operatorPassword}}\"}"
+            }
+          }
+        },
+        {
+          "name": "Login admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.collectionVariables.set(\"adminToken\", pm.response.json().token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": "{{gateway}}/api/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"username\":\"admin\",\"password\":\"{{adminPassword}}\"}"
+            }
+          }
+        },
+        {
+          "name": "A-01 wrong password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 401\", function () { pm.response.to.have.status(401); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": "{{gateway}}/api/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"username\":\"viewer\",\"password\":\"wrong\"}"
+            }
+          }
+        },
+        {
+          "name": "S-01 no token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 401\", function () { pm.response.to.have.status(401); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": "{{gateway}}/api/topology"
+          }
+        },
+        {
+          "name": "S-02 garbage token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 401\", function () { pm.response.to.have.status(401); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer not.a.jwt"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": "{{gateway}}/api/topology"
+          }
+        },
+        {
+          "name": "Me (viewer)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"role VIEWER\", function () { pm.expect(pm.response.json().role).to.eql(\"VIEWER\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{viewerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{gateway}}/api/auth/me"
+          }
+        }
+      ]
+    },
+    {
+      "name": "2 Roles",
+      "item": [
+        {
+          "name": "S-03 VIEWER POST workload",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 403\", function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{viewerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{gateway}}/api/workloads",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"denied\",\"cpuDemand\":10,\"priority\":\"LOW\"}"
+            }
+          }
+        },
+        {
+          "name": "S-04 OPERATOR sim control",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 403\", function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{operatorToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{gateway}}/api/sim/control",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"action\":\"PAUSE\"}"
+            }
+          }
+        },
+        {
+          "name": "S-04 OPERATOR seed-demo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 403\", function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{operatorToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{gateway}}/api/workloads/seed-demo"
+          }
+        },
+        {
+          "name": "S-06 forged X-User-Role",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 403\", function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "ADMIN"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{viewerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{gateway}}/api/sim/control",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"action\":\"PAUSE\"}"
+            }
+          }
+        },
+        {
+          "name": "S-07 /internal via gateway",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 404\", function () { pm.response.to.have.status(404); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{gateway}}/internal/topology"
+          }
+        }
+      ]
+    },
+    {
+      "name": "3 Route prefixes (A-05)",
+      "item": [
+        {
+          "name": "GET topology",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{viewerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{gateway}}/api/topology"
+          }
+        },
+        {
+          "name": "GET sim",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{viewerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{gateway}}/api/sim/state"
+          }
+        },
+        {
+          "name": "GET telemetry",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{viewerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{gateway}}/api/telemetry/racks/latest"
+          }
+        },
+        {
+          "name": "GET alerts",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{viewerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{gateway}}/api/alerts?state=ACTIVE&limit=50"
+          }
+        },
+        {
+          "name": "GET workloads",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{viewerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{gateway}}/api/workloads"
+          }
+        },
+        {
+          "name": "GET scheduler",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{viewerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{gateway}}/api/scheduler/status"
+          }
+        },
+        {
+          "name": "GET cooling",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{viewerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{gateway}}/api/cooling/units"
+          }
+        },
+        {
+          "name": "GET platform",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{viewerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{gateway}}/api/platform/services"
+          }
+        }
+      ]
+    },
+    {
+      "name": "4 Workloads (A-02, I-01)",
+      "item": [
+        {
+          "name": "cpuDemand 0",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 400\", function () { pm.response.to.have.status(400); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{operatorToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{gateway}}/api/workloads",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"bad\",\"cpuDemand\":0,\"priority\":\"LOW\"}"
+            }
+          }
+        },
+        {
+          "name": "cpuDemand 101",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 400\", function () { pm.response.to.have.status(400); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{operatorToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{gateway}}/api/workloads",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"bad\",\"cpuDemand\":101,\"priority\":\"LOW\"}"
+            }
+          }
+        },
+        {
+          "name": "Create valid workload",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", function () { pm.response.to.have.status(201); });",
+                  "pm.collectionVariables.set(\"workloadId\", pm.response.json().id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{operatorToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{gateway}}/api/workloads",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"postman-check\",\"cpuDemand\":10,\"priority\":\"LOW\"}"
+            }
+          }
+        },
+        {
+          "name": "Read it (RUNNING once placed; re-send if still PENDING)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{viewerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{gateway}}/api/workloads/{{workloadId}}"
+          }
+        },
+        {
+          "name": "Remove it",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"removed\", function () { pm.expect(pm.response.code).to.be.oneOf([200, 204]); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{operatorToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": "{{gateway}}/api/workloads/{{workloadId}}"
+          }
+        }
+      ]
+    }
+  ]
+}
