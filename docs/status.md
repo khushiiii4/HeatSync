@@ -243,7 +243,7 @@ Source: plan section 12 and roadmap Phase 10 (decisions D-091, D-092). Full deta
 
 | Item | Status | Evidence / note |
 |------|--------|-----------------|
-| Full Maven verification | Done | `./mvnw -B verify`: BUILD SUCCESS, 544 tests, 0 failures, 15 skipped (live-broker tests). Not repeated after the one query fix; the two affected test classes were re-run and pass |
+| Full Maven verification | Done | `./mvnw -B verify` was run again on the final Phase 10 branch containing the telemetry query fix (commit `1efb76c`): BUILD SUCCESS across 12 modules, 544 tests, 0 failures, 0 errors, 15 skipped. The 15 skipped live-broker tests had passed earlier against a temporary RabbitMQ and were not rerun in the final verification |
 | Live-broker tests (I-04, I-05, I-06 and related) | Done | 15 tests (4 simulator, 5 telemetry, 4 scheduler, 2 cooling) passed against a throwaway RabbitMQ container, removed afterwards |
 | Frontend tests and build | Done | 64 tests passed; `npm run build` succeeded |
 | `scripts/e2e.sh` through the gateway | Done | 38 passed, 0 failed (login, 401/403/404 cases, internal token, route prefixes, validation, placement flow) |
