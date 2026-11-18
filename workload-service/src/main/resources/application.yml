@@ -1,0 +1,52 @@
+server:
+  port: 8085
+
+spring:
+  application:
+    name: WORKLOAD-SERVICE
+  datasource:
+    # Own schema, own user (plan section 7). The password has no default and must come from the environment.
+    url: ${DB_URL:jdbc:mysql://localhost:3306/workload_db}
+    username: ${DB_USER:workload}
+    password: ${DB_PASSWORD:${WORKLOAD_DB_PASSWORD:}}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: update   # plan section 3: ddl-auto=update, no Flyway
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+        type:
+          preferred_instant_jdbc_type: TIMESTAMP
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: 5672
+    username: ${RABBITMQ_USER:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+    connection-timeout: 2000
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+    registry-fetch-interval-seconds: 3
+  instance:
+    prefer-ip-address: true
+    instance-id: ${spring.application.name}:${random.value}
+    lease-renewal-interval-in-seconds: 3
+    lease-expiration-duration-in-seconds: 9
+
+thermogrid:
+  workload:
+    scheduling-enabled: true
+    # Shared secret for /internal/**. Blank disables the check (local development); the gateway never routes /internal.
+    internal-token: ${THERMOGRID_INTERNAL_TOKEN:}
+    producer: WORKLOAD-SERVICE
+    event-version: 1
+    max-bulk: 500
+    publish-attempts: 3
+    publish-retry-ms: 200
+    retention:
+      removed-days: 7          # plan section 7: REMOVED workloads are purged after 7 days
+      interval-ms: 600000

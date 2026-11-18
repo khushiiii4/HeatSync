@@ -26,6 +26,10 @@ spring:
     password: ${RABBITMQ_PASSWORD:guest}
     # Fail fast when the broker is down so a tick is never held up for long.
     connection-timeout: 1000
+    listener:
+      simple:
+        # A message the simulator cannot parse must dead-letter, not loop forever.
+        default-requeue-rejected: false
   cloud:
     openfeign:
       client:
@@ -88,3 +92,10 @@ thermogrid:
       max-attempts: 12
       initial-backoff-ms: 1000
       max-backoff-ms: 15000
+    workloads:
+      listener-enabled: true
+      reconcile-ms: 60000       # full resync from GET /internal/workloads?status=RUNNING (plan: 60 s)
+      retry-ms: 5000            # retry period until the first successful load
+      tombstone-ttl-ms: 300000  # how long a removed workload id is remembered
+      queue-max-length: 50000
+      internal-token: ${THERMOGRID_INTERNAL_TOKEN:}

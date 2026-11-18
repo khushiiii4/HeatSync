@@ -12,3 +12,9 @@ thermogrid:
     publishing:
       enabled: false
     noise-seed: 1
+    workloads:
+      listener-enabled: false
+      reconcile-ms: 60000
+      retry-ms: 5000
+      tombstone-ttl-ms: 300000
+      queue-max-length: 1000
