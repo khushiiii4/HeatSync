@@ -1,6 +1,6 @@
 # Status register
 
-Mirrors the checklist in plan section 15.9. An item is Done only when its listed test was run and passed (plan rule 10). Last updated: 2026-11-19, Phase 7 integration checkpoint.
+Mirrors the checklist in plan section 15.9. An item is Done only when its listed test was run and passed (plan rule 10). Last updated: 2026-11-19, Configurable gateway port.
 
 ## Phase 0: Environment and repository setup
 
@@ -174,6 +174,18 @@ Live broker checks used a temporary `rabbitmq:3.13-management` container with an
 * **End to end through the gateway (security is off until phase 9):** topology 4 zones / 16 racks; simulator state ticking; telemetry latest for 16 racks with forecasts; workload `seed-demo` created 36 workloads, all RUNNING; a 15 kW HEAT_SPIKE on R23 raised an ACTIVE alert (WATCH, later WARNING forecast), the scheduler applied two THERMAL_WARNING migrations off R23, and the cooling controller raised Z2 output from 30 to 77 percent then back to 54 percent as the spike ended. Spike expired after 120 s.
 * **Maven:** `mvnw clean verify` from the root: BUILD SUCCESS, all 11 modules, 495 tests, 0 failures, 0 errors, 15 skipped (the broker-gated `LiveBrokerTest` classes). Those 15 were then run separately against a throwaway RabbitMQ container (shared broker not used): telemetry 5, scheduler 4, cooling 2, simulator 4, all passed. The first attempt failed with connection refused because the test started before the freshly created broker accepted AMQP connections (a wait-loop mistake in the run, not a product defect); it passed on rerun once the broker had settled. No test was skipped or changed to make it pass.
 * **Not tested (gaps):** a real publisher nack and an unroutable return on a live broker (unit tests only); a real MySQL outage (unit-level `DatabaseOutageTest` only); broker restart reconnect for services other than telemetry; DLQ replay through the management UI; the PowerShell scripts; api-gateway under `start-all.sh` (port conflict). The `LiveBrokerTest` start-up race above means these tests need the broker to be fully ready; a wait-for-ready step is advisable in CI.
+
+### Configurable gateway port (2026-11-19)
+
+| Item | Status | Evidence / note |
+|------|--------|-----------------|
+| api-gateway `server.port=${GATEWAY_PORT:8080}`; `.env.example` and README document it | Done | Routes, Eureka discovery, circuit breaker and CORS settings were not changed. Gateway module tests: 8 pass |
+| `start-all.sh` validates `GATEWAY_PORT` (1 to 65535), exports it to the gateway, checks the port is free **before the build and before any service starts**, and prints how to choose another port | Done | Default 8080 (occupied here by AgentService.exe): exit 1 with the message, no process started, no pid files, nothing killed. `GATEWAY_PORT=abc` rejected. `test-start-order.sh` passes |
+| Full start on `GATEWAY_PORT=18080` | Done | All 8 services ready in order; gateway answered on 18080: `/api/platform/services` (gateway UP), `/api/topology` returned 4 zones, `/internal/topology` still 404, CORS header for `http://localhost:5173` present |
+| `stop-all.sh` stops only processes it started | Done | Stopped the 8 recorded pids; the unrelated 8080 process, MySQL and RabbitMQ containers were untouched |
+| `start-all.ps1` honours `GATEWAY_PORT` | Dry run only | Dry run shows 8080 by default and 18080 when set. The file did not parse before this change (`"$what:"` at line 60); fixed to `${what}`. A real start with the PowerShell script was not run |
+| Gateway `/actuator/health` | Not exposed | Returns 404 (unchanged); gateway health was checked through `/api/platform/services` and Eureka |
+| Default-port (8080) successful start | Not tested | 8080 is occupied on this machine by an unrelated process, so only the refusal path was exercised; the default value is covered by the dry run and the yml placeholder |
 
 ## Optional (plan section 2 cut list and 15.5)
 

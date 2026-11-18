@@ -14,6 +14,7 @@
 #          DRY_RUN=1 scripts/start-all.sh  print the plan and the readiness checks, start nothing
 #          SKIP_BUILD=1 scripts/start-all.sh  do not run "mvnw install" first
 #          START_INFRA=0 scripts/start-all.sh do not touch Docker (assume MySQL and RabbitMQ run)
+#          GATEWAY_PORT=18080 scripts/start-all.sh  run the api-gateway on another port (default 8080; also read from .env)
 #          LIMIT=2 scripts/start-all.sh       start only the first N services (for testing the readiness logic)
 # Stop:    scripts/stop-all.sh   (stops only the processes this script started, recorded in .run/)
 #
@@ -54,6 +55,20 @@ load_env() {
     set +a
   fi
   unset DB_URL DB_USER DB_PASSWORD
+}
+
+# The gateway port comes from GATEWAY_PORT (environment or .env), default 8080. It is exported so the gateway process
+# (application.yml: server.port=${GATEWAY_PORT:8080}) listens on it, and written into the service table for the checks.
+resolve_gateway_port() {
+  GATEWAY_PORT="${GATEWAY_PORT:-8080}"
+  case "$GATEWAY_PORT" in
+    ''|*[!0-9]*) die "GATEWAY_PORT must be a number between 1 and 65535, got '$GATEWAY_PORT'" ;;
+  esac
+  if [ "$GATEWAY_PORT" -lt 1 ] || [ "$GATEWAY_PORT" -gt 65535 ]; then
+    die "GATEWAY_PORT must be a number between 1 and 65535, got '$GATEWAY_PORT'"
+  fi
+  export GATEWAY_PORT
+  SERVICES[$((${#SERVICES[@]} - 1))]="api-gateway|api-gateway|$GATEWAY_PORT|API-GATEWAY"
 }
 
 port_open() {   # port_open PORT
@@ -106,6 +121,9 @@ start_service() {   # start_service INDEX NAME MODULE PORT EUREKA_APP
   else
     rm -f "$pidfile"
     if port_open "$port"; then
+      if [ "$name" = "api-gateway" ]; then
+        die "gateway port $port is already in use by a process this script did not start; refusing to start api-gateway (nothing was killed). Pick a free port, for example: GATEWAY_PORT=18080 scripts/start-all.sh (or set GATEWAY_PORT in .env). To see the owner on Windows: Get-NetTCPConnection -LocalPort $port -State Listen"
+      fi
       die "port $port is already in use by a process this script did not start; refusing to start $name (stop it first, nothing was killed)"
     fi
     mkdir -p "$LOG_DIR"
@@ -134,7 +152,11 @@ start_service() {   # start_service INDEX NAME MODULE PORT EUREKA_APP
 
 main() {
   load_env
+  resolve_gateway_port
   mkdir -p "$RUN_DIR"
+  if [ "$DRY_RUN" != "1" ] && [ "$LIMIT" -eq 0 ] && port_open "$GATEWAY_PORT"      && ! { [ -f "$RUN_DIR/api-gateway.pid" ] && pid_alive "$(cat "$RUN_DIR/api-gateway.pid")"; }; then
+    die "gateway port $GATEWAY_PORT is already in use by a process this script did not start (nothing was killed), so nothing was started. Pick a free port, for example: GATEWAY_PORT=18080 scripts/start-all.sh (or set GATEWAY_PORT in .env). To see the owner on Windows: Get-NetTCPConnection -LocalPort $GATEWAY_PORT -State Listen"
+  fi
   if [ "$DRY_RUN" != "1" ] && [ "$SKIP_BUILD" != "1" ]; then
     say "building (mvnw -q -DskipTests install); set SKIP_BUILD=1 to skip"
     ( cd "$ROOT" && ./mvnw -q -DskipTests install ) || die "build failed"
@@ -147,7 +169,7 @@ main() {
     start_service "$i" "$name" "$module" "$port" "$app"
     i=$((i + 1))
   done
-  say "all services started. Eureka: $EUREKA_URL_BASE  Gateway: http://localhost:8080  RabbitMQ UI: http://localhost:15672"
+  say "all services started. Eureka: $EUREKA_URL_BASE  Gateway: http://localhost:$GATEWAY_PORT  RabbitMQ UI: http://localhost:15672"
   say "next: POST /api/workloads/seed-demo once every service shows UP"
 }
 

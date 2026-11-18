@@ -26,7 +26,7 @@ $Services = @(
   @('scheduler-service', 'scheduler-service', 8086, 'SCHEDULER-SERVICE'),
   @('cooling-controller-service', 'cooling-controller-service', 8087, 'COOLING-CONTROLLER-SERVICE'),
   @('simulator-service', 'simulator-service', 8083, 'SIMULATOR-SERVICE'),
-  @('api-gateway', 'api-gateway', 8080, 'API-GATEWAY')
+  @('api-gateway', 'api-gateway', 8080, 'API-GATEWAY')   # port replaced by $GatewayPort below
 )
 
 function Say($m) { Write-Host "[start-all] $m" }
@@ -57,7 +57,7 @@ function Test-EurekaUp($app) {
 function Wait-Until($what, [scriptblock]$check, [scriptblock]$alive) {
   $waited = 0
   while (-not (& $check)) {
-    if ($alive -and -not (& $alive)) { Fail "$what: the process exited (see its log in $LogDir)" }
+    if ($alive -and -not (& $alive)) { Fail "${what}: the process exited (see its log in $LogDir)" }
     Start-Sleep -Seconds 2; $waited += 2
     if ($waited -ge $ReadyTimeout) { Fail "$what not ready within ${ReadyTimeout}s" }
   }
@@ -65,6 +65,10 @@ function Wait-Until($what, [scriptblock]$check, [scriptblock]$alive) {
 }
 
 Import-DotEnv
+$GatewayPort = if ($env:GATEWAY_PORT) { $env:GATEWAY_PORT } else { '8080' }
+if ($GatewayPort -notmatch '^\d+$' -or [int]$GatewayPort -lt 1 -or [int]$GatewayPort -gt 65535) { Fail "GATEWAY_PORT must be a number between 1 and 65535, got '$GatewayPort'" }
+$env:GATEWAY_PORT = $GatewayPort
+$Services[$Services.Count - 1] = @('api-gateway', 'api-gateway', [int]$GatewayPort, 'API-GATEWAY')
 New-Item -ItemType Directory -Force -Path $RunDir | Out-Null
 
 if (-not $DryRun -and -not $SkipBuild) {
@@ -96,7 +100,7 @@ foreach ($s in $Services) {
   if (Test-Path $pidFile) { $proc = Get-Process -Id ([int](Get-Content $pidFile)) -ErrorAction SilentlyContinue }
   if ($proc) { Say "$name already running (pid $($proc.Id)), not starting a second copy" }
   else {
-    if (Test-Port $port) { Fail "port $port is already in use by a process this script did not start; refusing to start $name (nothing was killed)" }
+    if (Test-Port $port) { $hint = if ($name -eq 'api-gateway') { " Pick a free port, for example: `$env:GATEWAY_PORT=18080; scripts\start-all.ps1 (or set GATEWAY_PORT in .env)." } else { '' }; Fail "port $port is already in use by a process this script did not start; refusing to start $name (nothing was killed).$hint" }
     New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
     $log = Join-Path $LogDir "$name.log"
     $proc = Start-Process -FilePath (Join-Path $Root 'mvnw.cmd') -ArgumentList '-q', 'spring-boot:run' `
@@ -109,4 +113,4 @@ foreach ($s in $Services) {
   Wait-Until "$name port $port" { Test-Port $port } { -not $p.HasExited }
   if ($app -ne '-') { Wait-Until "$name registered in Eureka" { Test-EurekaUp $app } { -not $p.HasExited } }
 }
-Say "all services started. Eureka: $Eureka  Gateway: http://localhost:8080  RabbitMQ UI: http://localhost:15672"
+Say "all services started. Eureka: $Eureka  Gateway: http://localhost:$GatewayPort  RabbitMQ UI: http://localhost:15672"
