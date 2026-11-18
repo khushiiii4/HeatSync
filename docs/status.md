@@ -1,6 +1,6 @@
 # Status register
 
-Mirrors the checklist in plan section 15.9. An item is Done only when its listed test was run and passed (plan rule 10). Last updated: 2026-11-19, Phase 11 (failure testing).
+Mirrors the checklist in plan section 15.9. An item is Done only when its listed test was run and passed (plan rule 10). Last updated: 2026-11-19, Phase 12 (deployment and load testing).
 
 ## Phase 0: Environment and repository setup
 
@@ -264,3 +264,20 @@ Source: plan section 10, roadmap Phase 11 (D-093, D-094). Detail and timings: `d
 | Scenario 6 (Z3 failure), 7 and 8 (scheduler), 9 (telemetry), F-02, F-03 | Done | See testing.md section 7 |
 | `stop-all.sh <service>` | Done | D-094 |
 | Not done | | I-07 and k6 load (Phase 12); a row-level check that no reading was lost; browser re-check of stale badges |
+
+## Phase 12: Deployment, scaling and load testing
+
+Source: plan sections 5.8, 12.3, 13.4 and roadmap Phase 12 (D-095 to D-097). Detail and numbers: `docs/performance.md`.
+
+| Item | Status | Evidence / note |
+|------|--------|-----------------|
+| Multi-stage Dockerfiles for 9 services plus frontend, nginx serving the SPA and proxying /api | Done | All 10 images built; nginx served the SPA, deep links and proxied /api; /internal returned 404 |
+| `infra/docker-compose.full.yml`, env examples, heap caps, health checks, ordered start | Done (locally) | Whole stack healthy about 4 minutes after `up -d` on an empty database; JVM heap cap 256 MB, container limit 448 MB, no container killed |
+| Telemetry at 3 instances | Done | Eureka shows 3; flood stored all 30,000 messages once each |
+| `scripts/e2e.sh` through nginx on the Docker stack | Done | 37 passed, 0 failed (the direct-internal-port token check is skipped: no service port is published) |
+| k6 read test P-01 (50 users, 2 min) | Done | 0.00 percent errors, p95 21 ms |
+| Telemetry flood P-02, 1 and 3 instances | Done | Drain after flood 198 s with 1 instance, 60 s with 3; peak queue 23,685 against 17,652 |
+| P-03 two workload instances | Done, partly | Traffic split 1.06 MB to 1.10 MB; no per-response instance id to show alternation directly |
+| Flood endpoints (D-096) and gateway bulkhead fix (D-095) | Done | New tests: flood generator and validation, synthetic cleanup, 60-concurrent-call gateway regression (fails without the fix) |
+| Full `./mvnw -B verify` after the Phase 12 code changes | Done | BUILD SUCCESS, 549 tests, 0 failures, 15 skipped (testing.md section 8) |
+| Deployment on a lab server, lab URL | **Not done** | Needs the lab host, its RAM, Docker and a filled-in .env |

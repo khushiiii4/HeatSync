@@ -13,6 +13,11 @@ public interface RackReadingRepository extends JpaRepository<RackReading, Long> 
 
     boolean existsByRackIdAndRecordedAt(String rackId, Instant recordedAt);
 
+    /** Phase 12 flood cleanup: removes the readings of synthetic racks (id prefix), nothing else. */
+    @Modifying
+    @Query("delete from RackReading r where r.rackId like concat(:prefix, '%')")
+    int deleteByRackIdPrefix(@Param("prefix") String prefix);
+
     long countByRackId(String rackId);
 
     List<RackReading> findByRackIdAndRecordedAtGreaterThanEqualOrderByRecordedAtAsc(String rackId, Instant from);

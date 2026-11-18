@@ -7,10 +7,16 @@ import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface RackForecastStateRepository extends JpaRepository<RackForecastState, String> {
+
+    /** Phase 12 flood cleanup: removes the forecast state of synthetic racks (id prefix), nothing else. */
+    @Modifying
+    @Query("delete from RackForecastState s where s.rackId like concat(:prefix, '%')")
+    int deleteByRackIdPrefix(@Param("prefix") String prefix);
 
     /** SELECT ... FOR UPDATE: serialises every writer of one rack's state. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)

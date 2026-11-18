@@ -15,3 +15,11 @@ Every gateway route needs `Authorization: Bearer <JWT>` except `POST /api/auth/l
 | `POST /api/sim/control`, `POST /api/workloads/seed-demo` | ADMIN |
 
 The gateway removes any client-sent `X-User-Name` and `X-User-Role` and sets them from the verified token, so downstream services can trust them.
+
+## Phase 12 additions
+
+| Method and path | Role (gateway) | Purpose |
+|-----------------|----------------|---------|
+| `POST /api/sim/flood` | ADMIN | Body `{"ratePerSec":500,"durationSec":60,"racks":50}` (1 to 5000, 1 to 300, 1 to 200, racks default 50). Publishes synthetic rack readings for racks SYN001 upward. 202 with progress, 409 if a flood is running, 400 if out of range |
+| `GET /api/sim/flood` | VIEWER | Progress: running, planned, sent, failed, startedAt, finishedAt |
+| `DELETE /api/telemetry/synthetic` | ADMIN | Removes the synthetic racks' readings and forecast states; returns the counts removed |

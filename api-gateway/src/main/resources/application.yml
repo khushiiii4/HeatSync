@@ -6,6 +6,14 @@ spring:
   application:
     name: API-GATEWAY
   cloud:
+    circuitbreaker:
+      bulkhead:
+        resilience4j:
+          # Found in the Phase 12 load test: Resilience4j adds a semaphore bulkhead of 25 concurrent calls per route by
+          # default. 50 simultaneous requests then raised BulkheadFullException, which counted as circuit failures, the
+          # circuit opened and every call got a 503. The plan asks for a circuit breaker and a 5 s timeout only
+          # (section 4), so the concurrency cap is off; the time limiter and failure-rate breaker stay.
+          enabled: false
     loadbalancer:
       # The default (non-Caffeine) cache never expires entries, so a stopped service would stay
       # routable. Read straight from the Eureka client registry instead (refreshed every 3 s below).

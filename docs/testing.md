@@ -115,3 +115,7 @@ Drives the running stack through the gateway. Every scenario starts from a reset
 - The runs are on one machine with the dev MySQL and RabbitMQ containers; F-03 restarted the dev RabbitMQ container.
 - "No acknowledged message lost" was checked only as: backlog drains, readings resume and the dead-letter count did not change. A row-by-row reading count was not done.
 - The Control Room buttons and the browser stale badges were not re-checked in a browser in Phase 11.
+
+## 8. Phase 12 code changes: Maven verification
+
+After adding the flood generator, the synthetic cleanup endpoint, the gateway role rules and the gateway bulkhead fix, `./mvnw -B verify` was run again on the whole project: **BUILD SUCCESS, 549 tests, 0 failures, 0 errors, 15 skipped** (the same 15 live-broker tests, not re-run here). The 5 new tests: `FloodTest` (3: count, unique keys and SYN prefix; failed publishes counted; request validation and 409), `SyntheticCleanupTest` (1: removes only SYN racks), and `GatewayHttpBehaviourTest.manyConcurrentCallsThroughACircuitBreakerRouteAreNotRejected` (60 concurrent calls; confirmed to FAIL with the bulkhead enabled and pass with it disabled). `GatewaySecurityTest` also asserts the new ADMIN-only paths. Frontend tests were not re-run in Phase 12 (no frontend source changed since Phase 11, where all 64 passed). Docker deployment, k6 and flood results are in `docs/performance.md`.

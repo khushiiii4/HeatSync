@@ -1,0 +1,224 @@
+# Full ThermoGrid deployment (plan section 13.4, phase 12): MySQL, RabbitMQ, Eureka, gateway, seven business
+# services, telemetry-service scaled to 3 instances, and nginx serving the React build with /api proxied to the gateway.
+#
+#   docker compose --env-file .env -f infra/docker-compose.full.yml up -d --build     (run from the repository root)
+#   docker compose --env-file .env -f infra/docker-compose.full.yml up -d --scale telemetry-service=3
+#   docker compose --env-file .env -f infra/docker-compose.full.yml down               (add -v to delete the data)
+#
+# Secrets and passwords come ONLY from the environment / the git-ignored .env (see infra/env/lab.env.example). Nothing
+# secret is written in this file. The project name differs from the development compose file (infra/docker-compose.yml),
+# so the two can coexist: different containers, volumes and network.
+name: thermogrid-full
+
+x-java-service: &java-service
+  restart: unless-stopped
+  mem_limit: 448m          # JVM heap capped at 256 MB (JAVA_OPTS in each Dockerfile) plus metaspace, threads, code cache
+  environment: &java-env
+    EUREKA_URL: http://eureka-server:8761/eureka/
+    RABBITMQ_HOST: rabbitmq
+    RABBITMQ_USER: ${RABBITMQ_USER:?set RABBITMQ_USER}
+    RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD}
+    THERMOGRID_INTERNAL_TOKEN: ${THERMOGRID_INTERNAL_TOKEN:?set THERMOGRID_INTERNAL_TOKEN}
+    THERMOGRID_SECURITY_ENABLED: ${THERMOGRID_SECURITY_ENABLED:-true}
+
+x-healthcheck: &tcp-health
+  interval: 10s
+  timeout: 3s
+  retries: 18
+  start_period: 40s
+
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    mem_limit: 768m
+    command: ["--innodb-buffer-pool-size=128M", "--max-connections=250"]
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD}
+      AUTH_DB_PASSWORD: ${AUTH_DB_PASSWORD:?set AUTH_DB_PASSWORD}
+      TOPOLOGY_DB_PASSWORD: ${TOPOLOGY_DB_PASSWORD:?set TOPOLOGY_DB_PASSWORD}
+      TELEMETRY_DB_PASSWORD: ${TELEMETRY_DB_PASSWORD:?set TELEMETRY_DB_PASSWORD}
+      WORKLOAD_DB_PASSWORD: ${WORKLOAD_DB_PASSWORD:?set WORKLOAD_DB_PASSWORD}
+      SCHEDULER_DB_PASSWORD: ${SCHEDULER_DB_PASSWORD:?set SCHEDULER_DB_PASSWORD}
+      COOLING_DB_PASSWORD: ${COOLING_DB_PASSWORD:?set COOLING_DB_PASSWORD}
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    restart: unless-stopped
+    mem_limit: 512m
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?set RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD}
+    ports:
+      - "127.0.0.1:${RABBITMQ_UI_PORT:-15673}:15672"     # management UI (queue graphs for the demo and load test)
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 30s
+
+  eureka-server:
+    <<: *java-service
+    build: { context: .., dockerfile: eureka-server/Dockerfile }
+    image: thermogrid/eureka-server
+    environment: *java-env
+    ports:
+      - "127.0.0.1:${EUREKA_PORT:-8762}:8761"            # Eureka dashboard (discovery and instance counts)
+    healthcheck: { <<: *tcp-health, test: ["CMD-SHELL", "nc -z localhost 8761"] }
+
+  api-gateway:
+    <<: *java-service
+    build: { context: .., dockerfile: api-gateway/Dockerfile }
+    image: thermogrid/api-gateway
+    environment:
+      <<: *java-env
+      THERMOGRID_JWT_SECRET: ${THERMOGRID_JWT_SECRET:?set THERMOGRID_JWT_SECRET}
+    depends_on:
+      eureka-server: { condition: service_healthy }
+    healthcheck: { <<: *tcp-health, test: ["CMD-SHELL", "nc -z localhost 8080"] }
+
+  auth-service:
+    <<: *java-service
+    build: { context: .., dockerfile: auth-service/Dockerfile }
+    image: thermogrid/auth-service
+    environment:
+      <<: *java-env
+      DB_URL: jdbc:mysql://mysql:3306/auth_db
+      DB_USER: auth
+      DB_PASSWORD: ${AUTH_DB_PASSWORD:?set AUTH_DB_PASSWORD}
+      THERMOGRID_JWT_SECRET: ${THERMOGRID_JWT_SECRET:?set THERMOGRID_JWT_SECRET}
+      SEED_VIEWER_PASSWORD: ${SEED_VIEWER_PASSWORD:?set SEED_VIEWER_PASSWORD}
+      SEED_OPERATOR_PASSWORD: ${SEED_OPERATOR_PASSWORD:?set SEED_OPERATOR_PASSWORD}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:?set SEED_ADMIN_PASSWORD}
+    depends_on:
+      mysql: { condition: service_healthy }
+      eureka-server: { condition: service_healthy }
+    healthcheck: { <<: *tcp-health, test: ["CMD-SHELL", "nc -z localhost 8081"] }
+
+  topology-service:
+    <<: *java-service
+    build: { context: .., dockerfile: topology-service/Dockerfile }
+    image: thermogrid/topology-service
+    environment:
+      <<: *java-env
+      DB_URL: jdbc:mysql://mysql:3306/topology_db
+      DB_USER: topology
+      DB_PASSWORD: ${TOPOLOGY_DB_PASSWORD:?set TOPOLOGY_DB_PASSWORD}
+    depends_on:
+      mysql: { condition: service_healthy }
+      eureka-server: { condition: service_healthy }
+    healthcheck: { <<: *tcp-health, test: ["CMD-SHELL", "nc -z localhost 8082"] }
+
+  workload-service:
+    <<: *java-service
+    build: { context: .., dockerfile: workload-service/Dockerfile }
+    image: thermogrid/workload-service
+    environment:
+      <<: *java-env
+      DB_URL: jdbc:mysql://mysql:3306/workload_db
+      DB_USER: workload
+      DB_PASSWORD: ${WORKLOAD_DB_PASSWORD:?set WORKLOAD_DB_PASSWORD}
+    depends_on:
+      mysql: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      eureka-server: { condition: service_healthy }
+    healthcheck: { <<: *tcp-health, test: ["CMD-SHELL", "nc -z localhost 8085"] }
+
+  # Competing consumers on q.telemetry.rack-readings (plan 5.8: 1 to 3 instances). No fixed container name or host
+  # port, so any number of replicas can run; each registers in Eureka with its own container IP.
+  telemetry-service:
+    <<: *java-service
+    build: { context: .., dockerfile: telemetry-service/Dockerfile }
+    image: thermogrid/telemetry-service
+    deploy:
+      replicas: ${TELEMETRY_REPLICAS:-3}
+    environment:
+      <<: *java-env
+      DB_URL: jdbc:mysql://mysql:3306/telemetry_db
+      DB_USER: telemetry
+      DB_PASSWORD: ${TELEMETRY_DB_PASSWORD:?set TELEMETRY_DB_PASSWORD}
+    depends_on:
+      mysql: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      eureka-server: { condition: service_healthy }
+    healthcheck: { <<: *tcp-health, test: ["CMD-SHELL", "nc -z localhost 8084"] }
+
+  scheduler-service:
+    <<: *java-service
+    build: { context: .., dockerfile: scheduler-service/Dockerfile }
+    image: thermogrid/scheduler-service
+    environment:
+      <<: *java-env
+      DB_URL: jdbc:mysql://mysql:3306/scheduler_db
+      DB_USER: scheduler
+      DB_PASSWORD: ${SCHEDULER_DB_PASSWORD:?set SCHEDULER_DB_PASSWORD}
+    depends_on:
+      mysql: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      eureka-server: { condition: service_healthy }
+      topology-service: { condition: service_healthy }
+      workload-service: { condition: service_healthy }
+      telemetry-service: { condition: service_healthy }
+    healthcheck: { <<: *tcp-health, test: ["CMD-SHELL", "nc -z localhost 8086"] }
+
+  cooling-controller-service:
+    <<: *java-service
+    build: { context: .., dockerfile: cooling-controller-service/Dockerfile }
+    image: thermogrid/cooling-controller-service
+    environment:
+      <<: *java-env
+      DB_URL: jdbc:mysql://mysql:3306/cooling_db
+      DB_USER: cooling
+      DB_PASSWORD: ${COOLING_DB_PASSWORD:?set COOLING_DB_PASSWORD}
+    depends_on:
+      mysql: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      eureka-server: { condition: service_healthy }
+      topology-service: { condition: service_healthy }
+    healthcheck: { <<: *tcp-health, test: ["CMD-SHELL", "nc -z localhost 8087"] }
+
+  # Starts last (plan 13.4): it needs topology and workload-service, and every consumer of its events must already
+  # be running, because a message published before its queue exists is lost.
+  simulator-service:
+    <<: *java-service
+    build: { context: .., dockerfile: simulator-service/Dockerfile }
+    image: thermogrid/simulator-service
+    environment: *java-env
+    volumes:
+      - sim-data:/app/data                                # embedded H2 file simdb (failure-injection log)
+    depends_on:
+      rabbitmq: { condition: service_healthy }
+      eureka-server: { condition: service_healthy }
+      topology-service: { condition: service_healthy }
+      workload-service: { condition: service_healthy }
+      telemetry-service: { condition: service_healthy }
+      scheduler-service: { condition: service_healthy }
+      cooling-controller-service: { condition: service_healthy }
+    healthcheck: { <<: *tcp-health, test: ["CMD-SHELL", "nc -z localhost 8083"] }
+
+  frontend:
+    build: { context: .., dockerfile: frontend/Dockerfile }
+    image: thermogrid/frontend
+    restart: unless-stopped
+    mem_limit: 64m
+    ports:
+      - "${HTTP_PORT:-80}:80"
+    depends_on:
+      api-gateway: { condition: service_healthy }
+
+volumes:
+  mysql-data:
+  rabbitmq-data:
+  sim-data:
