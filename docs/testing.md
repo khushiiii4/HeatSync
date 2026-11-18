@@ -30,7 +30,7 @@ Source: plan section 12 and roadmap Phase 10. Everything below was run on 2026-1
 | cooling-controller-service | 76 | 0 | 2 (live broker) |
 | **Total** | **544** | **0** | **15** |
 
-Every service meets the plan's minimum (8 test methods; telemetry and scheduler 10 or more). The 15 skips are the `LiveBrokerTest` classes, which are only enabled against a throwaway broker (section 4). These counts were taken before the Phase 10 query fix (section 3); after it, `IngestionTest` and `TelemetryApiTest` were re-run and passed, but the full `verify` was not repeated.
+Every service meets the plan's minimum (8 test methods; telemetry and scheduler 10 or more). The 15 skips are the `LiveBrokerTest` classes, which are only enabled against a throwaway broker (section 4). The full `./mvnw -B verify` was run twice: once before the Phase 10 telemetry query fix (section 3) and once again on the final branch (commit `1efb76c`, which includes the fix). Both gave BUILD SUCCESS with the same totals shown above: 12 modules, 544 tests, 0 failures, 0 errors, 15 skipped. The 15 skipped live-broker tests were run separately against a temporary RabbitMQ container and passed (section 4); they were not re-run during the final `verify`.
 
 Frontend: `npm test` 6 files, 64 tests passed; `npm run build` succeeded (chunk-size warning only).
 
@@ -82,7 +82,7 @@ These cover dead-lettering after 3 attempts (I-04), malformed JSON dead-lettered
 | Expired-token case against the live stack | Covered only by unit tests (gateway and auth) |
 | Code coverage (JaCoCo) | Not measured (optional in the plan) |
 | Gateway on default port 8080 | Not tested: 8080 is occupied on this machine; everything ran on 18080 |
-| Full `./mvnw verify` after the telemetry query fix | Not repeated; only the two affected test classes were re-run |
+| `scripts/e2e.sh` (38/38) during the final verification | Not repeated. It was run after the telemetry fix (with the rebuilt telemetry jar); the final verification re-ran only `./mvnw -B verify` |
 
 ## 6. Deviations from the plan
 
