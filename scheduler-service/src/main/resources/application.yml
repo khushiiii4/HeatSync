@@ -1,0 +1,113 @@
+server:
+  port: 8086
+
+spring:
+  application:
+    name: SCHEDULER-SERVICE
+  datasource:
+    # Own schema, own user (plan section 7). The password has no default and must come from the environment.
+    url: ${DB_URL:jdbc:mysql://localhost:3306/scheduler_db}
+    username: ${DB_USER:scheduler}
+    password: ${DB_PASSWORD:${SCHEDULER_DB_PASSWORD:}}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: update   # plan section 3: ddl-auto=update, no Flyway
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+        type:
+          preferred_instant_jdbc_type: TIMESTAMP
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: 5672
+    username: ${RABBITMQ_USER:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+    connection-timeout: 2000
+    listener:
+      simple:
+        concurrency: 1
+        max-concurrency: 1
+        prefetch: 10
+        # Retry (3 x, 1/2/4 s) and dead-lettering are configured in AmqpConfig.
+  cloud:
+    openfeign:
+      client:
+        config:
+          default:
+            connect-timeout: 1000
+            read-timeout: 5000
+          # Plan 5.2: telemetry reads time out after 2 s.
+          schedulerTelemetryClient:
+            connect-timeout: 1000
+            read-timeout: 2000
+          schedulerTopologyClient:
+            connect-timeout: 1000
+            read-timeout: 3000
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+    registry-fetch-interval-seconds: 3
+  instance:
+    prefer-ip-address: true
+    instance-id: ${spring.application.name}:${random.value}
+    lease-renewal-interval-in-seconds: 3
+    lease-expiration-duration-in-seconds: 9
+
+thermogrid:
+  scheduler:
+    scheduling-enabled: true
+    listeners-enabled: true
+    single-instance-lock: true
+    internal-token: ${THERMOGRID_INTERNAL_TOKEN:}
+    reconcile-ms: 5000          # ReconcileScheduler (plan section 5)
+    pending-ms: 3000            # PendingPlacementScheduler
+    event-max-age-sec: 30       # events older than this are not acted on
+    topology-cache-sec: 30
+    max-list-limit: 500
+    processed-event-retention-hours: 24
+    retention-interval-ms: 600000
+    amqp:
+      state-queue-ttl-ms: 60000
+      queue-max-length: 50000
+    resilience:
+      workload-get-retries: 2   # 2 retries on GET only; the assignment PUT is never retried
+      retry-wait-ms: 200
+      telemetry:
+        window-size: 6
+        min-calls: 3
+        failure-rate-pct: 50
+        wait-open-ms: 5000
+        half-open-calls: 2
+      workload:
+        window-size: 10
+        min-calls: 5
+        failure-rate-pct: 50
+        wait-open-ms: 5000
+        half-open-calls: 2
+    # Plan sections 6C and 6D. Do not change without recording it in docs/decision-log.md.
+    tuning:
+      capacity-cap: 0.85
+      hold-capacity-cap: 0.70
+      heat-per-cpu: 0.08
+      max-after-c: 32.0
+      temp-ref-c: 20.0
+      temp-span-c: 20.0
+      w-temp: 0.6
+      w-util: 0.3
+      w-zone: 0.1
+      tie-gap: 0.02
+      shed-ref-c: 32.0
+      shed-ref-critical-c: 30.0
+      min-shed-cpu: 10
+      max-moves: 2
+      max-moves-urgent: 4
+      workload-cooldown-sec: 120
+      source-cooldown-sec: 20
+      source-cooldown-critical-sec: 10
+      quarantine-sec: 60
+      failure-backoff-sec: 10
+      rebalance-std-dev-pct: 15.0

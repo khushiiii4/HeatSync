@@ -1,6 +1,6 @@
 # Status register
 
-Mirrors the checklist in plan section 15.9. An item is Done only when its listed test was run and passed (plan rule 10). Last updated: 2026-11-18, end of Phase 4.
+Mirrors the checklist in plan section 15.9. An item is Done only when its listed test was run and passed (plan rule 10). Last updated: 2026-11-18, end of Phase 5.
 
 ## Phase 0: Environment and repository setup
 
@@ -88,6 +88,33 @@ All Pending. Nothing from these phases has been started.
 | Reconciliation and bootstrap at runtime | Done | A database-only change (no event) was picked up within the 60 s window; a restarted simulator loaded 35 running workloads. A malformed message published on the exchange reached `thermogrid.dlq` once (purged afterwards) |
 | Workload reached through the gateway | Not verified | Gateway not started; the port 8080 conflict is unchanged |
 | Telemetry and alert behaviour with workload-driven load | Not verified | Telemetry was not started in this phase; Z2 settle temperatures with the 720-unit layout were not measured against the 30/34/38 C thresholds |
+
+## Phase 5: Scheduler
+
+| Item | Status | Evidence / note |
+|------|--------|-----------------|
+| scheduler-service on 8086, Eureka lease 3 s / 9 s, `scheduler_db` with scheduler user | Done | Runtime: registered, tables created on the real MySQL; `SHOW CREATE TABLE` for `migration` and `placement_decision` matches plan section 7 (columns, keys, both indexes) |
+| Tables migration, placement_decision, zone_cooling_state, processed_event | Done | Used at runtime: 24 migrations, 24 decisions (with top-3 candidate JSON), 3 processed events |
+| PlacementEngine (plan 6C) | Done | 12 pure tests: the worked example (R41 0.428 vs R31 0.423, gap 0.005, R41 wins), a gap of 0.02 or more keeps the lowest score, HIGH-first ordering, 85 percent cap at the boundary, stale rack / FAULT zone / maintenance / WARNING / 32 C headroom exclusions, reservation, HOLD scoring and 70 percent cap |
+| MigrationPlanner and CooldownTracker (plan 6D) | Done | 18 pure tests: shed amount (50, 25, floor 10, CRITICAL 30 C reference), LOW/MEDIUM/HIGH then CPU order, 2 and 4 move limits, 60 s versus 130 s cooldown, source cooldown and CRITICAL bypass, failure backoff, reservation, quarantine, drain order across a zone, HOLD, rebalance |
+| MigrationExecutor | Done | Tests: new UUID per attempt, current version and source rack in the PUT, allowed reason, APPLIED/FAILED rows, 409 and 503 handling, the PUT called once only, later cycle re-plans |
+| ClusterSnapshotService, Resilience4j, HOLD | Done | Tests: topology cached 30 s and last good copy reused, workload GET 3 calls (2 retries) then the cycle is skipped, open telemetry breaker means HOLD without calling telemetry, return to NORMAL |
+| Event consumers and idempotency | Done | 13 tests: duplicate `workload.submitted` ignored, events older than 30 s not acted on (30 s exactly is fresh), alert and cooling reactions, out-of-order cooling state, malformed messages. Runtime: durable queues bound; a manually published `cooling.unit.state` FAULT was stored and acted on |
+| Reconcile (5 s) and pending (3 s) loops, autopilot | Done | Tests: a missed submission is repaired by reconcile, autopilot off stops migration but not placement. Runtime: autopilot toggled through the API |
+| REST: status, migrations, decisions, autopilot, rebalance | Done | 8 API tests; all five called at runtime |
+| Singleton protection | Done | 3 unit tests with a fake connection. Runtime: a second scheduler on port 8096 failed at startup on the lock bean while the first ran |
+| Scenario 3 and 4 without a cooling controller | Done | See below |
+| 409 and outage at runtime | Not verified at runtime | 409, 503, connection failure and open-circuit handling are covered by tests only; no 409 occurred in the live runs (all 24 moves APPLIED), and workload-service was not stopped |
+| Telemetry, scheduler and workload through the gateway | Not verified | Gateway not started; the port 8080 conflict is unchanged |
+| Automatic 30 s rebalance loop | Not implemented | Only the manual endpoint (D-054) |
+
+Scenario runs (real MySQL, RabbitMQ, Eureka, topology, simulator, telemetry, workload and scheduler, no cooling controller, demo seed of 720 units, cooling output fixed at the simulator's 40 percent):
+
+- **Seed check.** Z2 settled at 26.5 to 27.2 C with 80 to 85 units per rack and no alerts, as plan section 10 describes. No scheduler action.
+- **Placement.** A submitted HIGH 20-unit workload went from PENDING to RUNNING on R42 within 4 s. The decision row holds R42 (0.332) against R44 (0.340) and R34 (0.348).
+- **Scenario 3 and 4.** `COOLING_DEGRADED` 0.25 on Z2. The first WARNING (R22, R23) came 40 s after injection. The scheduler then made 10 THERMAL_WARNING moves in 80 s, at most 2 per reconcile cycle (they appear as pairs within 0.1 s, one pair per 5 s cycle), LOW priority first on each rack (R23: LOW 30, LOW 15, then MEDIUM 20; R22: LOW 20, LOW 15, then MEDIUM 30), always into other zones with headroom (largest rack load afterwards 65 units, cap 85). No workload was moved twice (checked against the 120 s cooldown). Z2 peaked at about 32.1 C observed and 33.9 C forecast and never reached 34 C observed. Z2 load fell from 330 to 115 units, temperatures stopped rising about 70 s after injection and then fell. Clearing the degradation was done after that.
+- **HOLD.** Telemetry was killed: the scheduler reported HOLD about 3 s later. Two workloads submitted during HOLD were placed with mode HOLD decisions on utilisation only (scores 0.35 and 0.45). A manually published cooling FAULT for Z3 was stored but caused no migration. When telemetry restarted the scheduler returned to NORMAL after 18 s (startup time of telemetry) and drained Z3: 11 COOLING_FAILURE moves, all APPLIED, none into Z3.
+- **Demo layout.** The 720-unit layout gives the intended thermal scenario: Z2 is warm but stable, and a 0.25 degradation pushes forecasts over 32 C within a minute. No constants were changed.
 
 ## Optional (plan section 2 cut list and 15.5)
 

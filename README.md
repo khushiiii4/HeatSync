@@ -6,7 +6,7 @@ ThermoGrid is a software-simulated data center (4 cooling zones, 16 racks) built
 
 ## Current status
 
-Phase 0 (environment and repository setup) is in progress. The repository contains the Maven multi-module skeleton and the development infrastructure (MySQL and RabbitMQ). No service code or frontend exists yet. See [docs/status.md](docs/status.md).
+Phases 0 to 5 are implemented: infrastructure, contracts, Eureka and the API gateway, topology, the simulator, telemetry with forecasting and alerts, the workload service, and the scheduler (thermal-aware placement, migration, reconcile and HOLD mode). Not built yet: cooling controller, authentication, frontend. Start services consumers-first (scheduler before the simulator and workload services). See [docs/status.md](docs/status.md) for evidence per item and [docs/decision-log.md](docs/decision-log.md) for decisions.
 
 ## Modules
 
