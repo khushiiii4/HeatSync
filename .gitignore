@@ -1,5 +1,26 @@
+# Build output
 target/
+node_modules/
+dist/
+
+# IDE
 .idea/
 .vscode/
 *.iml
 
+# Secrets and local environment (never commit)
+.env
+.env.*
+!.env.example
+infra/env/*.env
+!infra/env/*.env.example
+
+# Runtime data (simulator H2 file database, logs)
+data/
+*.mv.db
+*.trace.db
+*.log
+
+# OS
+.DS_Store
+Thumbs.db

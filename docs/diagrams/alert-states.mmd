@@ -1,0 +1,8 @@
+stateDiagram-v2
+  [*] --> NORMAL
+  NORMAL --> WATCH: value at least 30
+  WATCH --> WARNING: value at least 34
+  WARNING --> CRITICAL: value at least 38
+  CRITICAL --> WARNING: below 36 for 5 readings
+  WARNING --> WATCH: below 32 for 5 readings
+  WATCH --> NORMAL: below 28 for 5 readings
