@@ -1,6 +1,6 @@
 # Status register
 
-Mirrors the checklist in plan section 15.9. An item is Done only when its listed test was run and passed (plan rule 10). Last updated: 2026-11-19, Configurable gateway port.
+Mirrors the checklist in plan section 15.9. An item is Done only when its listed test was run and passed (plan rule 10). Last updated: 2026-11-19, Phase 8 (frontend dashboard).
 
 ## Phase 0: Environment and repository setup
 
@@ -60,9 +60,9 @@ Phase 0 is not closed: the branch has not been pushed or merged, and the full-te
 | Phase 3 acceptance: degrading Z2 produces a PREDICTED WARNING alert and event | Done | Runtime: COOLING_DEGRADED 0.25 on Z2 gave a PREDICTED WARNING on R23 at 32.04 C (forecast 34.01), 25 ticks (50 s) before a rack observed 34 C. Event seen on `thermal.alert.#` |
 | Telemetry reached through the gateway | Not verified | Gateway not started; the port 8080 conflict is unchanged |
 
-## Phases 8 to 13
+## Phases 9 to 13
 
-All Pending. Phases 4 to 7 are documented in their own sections below.
+All Pending. Phases 4 to 8 are documented in their own sections below.
 
 ## Documentation
 
@@ -186,6 +186,31 @@ Live broker checks used a temporary `rabbitmq:3.13-management` container with an
 | `start-all.ps1` honours `GATEWAY_PORT` | Dry run only | Dry run shows 8080 by default and 18080 when set. The file did not parse before this change (`"$what:"` at line 60); fixed to `${what}`. A real start with the PowerShell script was not run |
 | Gateway `/actuator/health` | Not exposed | Returns 404 (unchanged); gateway health was checked through `/api/platform/services` and Eureka |
 | Default-port (8080) successful start | Not tested | 8080 is occupied on this machine by an unrelated process, so only the refusal path was exercised; the default value is covered by the dry run and the yml placeholder |
+
+## Phase 8: Frontend dashboard
+
+Source: plan sections 9 to 9.5 and roadmap Phase 8. Stack: React 18, Vite, Tailwind CSS 4, Recharts, TanStack Query, React Router, Axios (additions logged in D-078 to D-083). No backend file was changed.
+
+**API comparison before coding.** Every endpoint in section 8.2 that the dashboard uses was called through the gateway and its real response compared with sections 8.3 and 9.4: the shapes match (extra fields exist, none are missing). Three gaps were bridged on the client without inventing endpoints (D-082): a migration has only `workloadId` (the job is named by joining the running-workloads list), there is no cooling output history endpoint (the Cooling page draws the controller's action log), and `AUTH-SERVICE` is reported DOWN until Phase 9 (shown as "not deployed").
+
+| Item | Status | Evidence / note |
+|------|--------|-----------------|
+| API client, login stub, role gating, 401 and 403 handling | Done | Axios client with token interceptor; `/login` tries `POST /api/auth/login` and offers a labelled demo session (security is off until Phase 9, D-080). Role gating covered by unit tests. A real JWT login was **not** exercised: auth-service does not exist yet |
+| Overview (`/`): KPI strip, rack heat map, active alerts, decision feed, cooling zone cards, workload distribution, service health strip | Done | Run against the live backend. Heat map: fill by temperature, outline by 60 s forecast risk, id, temperature, CPU bar, trend arrow, legend, stale (grey) and maintenance (hatched) styles, click opens the rack, row labels show each zone's cooling state, two second flash on migration racks |
+| Rack detail (`/racks/:rackId`) | Done | Temperature and forecast chart (10 min, WATCH/WARNING/CRITICAL lines), power and CPU chart, workloads on the rack, alerts for the rack, placement explainer |
+| Workloads (`/workloads`) | Done | Table with filters, submit form (validation 1 to 100), remove with confirmation, CPU by rack stacked by priority, pending queue, capacity banner. Live check of the calls the page makes: POST gave PENDING then RUNNING on R33 within 6 s, DELETE gave REMOVED, cpuDemand 101 gave 400 |
+| Cooling (`/cooling`) | Done | Zone cards, output per zone over time, modelled power against the 70 percent baseline (plan 6E formula, labelled modelled), action log, manual override (OPERATOR). The manual override buttons were **not** clicked against the backend |
+| Event history (`/events`) (optional page) | Done | Alerts, migrations and cooling actions merged by time with filters |
+| Control Room (`/control`) | Done | Presets for scenarios 2 to 6 and a sensor dropout, custom injection (type, target, size, duration), every injection behind a confirmation that states the expected response, active failures with Clear, autopilot switch, rebalance, ADMIN pause/resume/seed/reset. Injection of COOLING_DEGRADED Z2 and COOLING_FAILURE Z3 and Clear were exercised through the UI; HEAT_SPIKE, SENSOR_DROPOUT presets, pause, reset-demo and rebalance were **not** clicked |
+| Polling: one TanStack Query per source, intervals from 9.4, independent error boundary per panel, last data kept, polling paused in hidden tabs | Done | Component tests for the panel states and the boundary. Hidden-tab pausing relies on TanStack's `refetchIntervalInBackground: false` and was not separately observed |
+| Stale badges with the server timestamp | Done | Live, one service at a time (`frontend/scripts/stale-check.sh`), every row recovered after restart: **scheduler** stopped: only the Decision feed degraded ("Scheduler unavailable, last update 01:42:25"), service strip red for Scheduler; **telemetry**: Rack heat map and Active alerts degraded, Cooling zones, Workload distribution and Decision feed stayed live; **cooling controller**: Cooling zones and Decision feed degraded; **workload**: Workload distribution degraded. The heat map kept updating through the scheduler, cooling and workload outages |
+| Unit tests: colour scale, merge-by-time, plus panel, service classification, roles, validation, cooling series, KPI derivations, rack cell | Done | `npm test`: 5 files, 53 tests pass |
+| Production build | Done | `npm run build` succeeds (bundle about 825 kB, 240 kB gzip; chunk-size warning not addressed); `vite preview` served it and the dashboard loaded live data through the gateway on 18080 |
+| Scenarios 1 to 8 followable on screen | Mostly | **1** baseline: all racks blue/green, no alerts, cooling 30 to 47 percent, modelled saving 61 to 63 percent. **2 to 5**: Z2 degraded through the UI: Z2 racks warmed to 30 to 31 C, PREDICTED WATCH alerts appeared within 30 s, Z2 output climbed 47 to 97 percent; after Clear output returned to the 40s. **The racks did not reach WARNING, so no new migration was triggered in this run**: the scenario text expects amber to orange and migrations; that is backend calibration (Phase 3 and 5), not changed here. Migrations from earlier runs do appear in the feed with reasons. **6**: Z3 failed through the UI: Z3 row label "Unit fault", all other zones lifted to 60 percent, Z3 CPU 0 on all four racks within 15 s, no CRITICAL, feed lines "Moved ... because the cooling unit in that zone failed". **7 and 8**: shown by the scheduler stop/restart check above (badge, then recovery) but **not** with an active Z2 alert or with a pending submitted workload, so "alerts stay active" and "pending rises" were not observed on screen |
+| Visual review | Done | Every page inspected at 1440x900, 1920x1080 and 1280x720 with `frontend/scripts/screenshots.mjs`: no horizontal scroll, no clipped text, zero console errors. Problems found and fixed: clipped forecast and trend text in narrow heat map cells, KPI orphan row and truncation, cramped zone cards at 1280 px, skipped rack labels in the narrow CPU chart. Screenshots: `docs/screenshots/` |
+| Accessibility | Partial | Keyboard focus rings, skip link, labelled controls, `aria-live` status, dialogs with Escape and focus return, rack cells described for screen readers, reduced-motion support. No automated contrast or screen reader audit was run |
+
+Gaps and limits: no authentication enforcement or real JWT flow (Phase 9); the rack maintenance-mode toggle (optional, cut list item 3) is **not** implemented in the UI (topology has `PUT /api/topology/racks/{id}/status`, and the heat map already renders MAINTENANCE racks hatched); the SSE upgrade is not built; no Docker or nginx packaging (Phase 12); the dashboard was checked in Chrome only; screenshots are of the simulated plant, not a deployment.
 
 ## Optional (plan section 2 cut list and 15.5)
 
