@@ -9,16 +9,18 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
-/** Workload events move heat sources; cooling events are still ignored until Phase 6. */
+/** Workload events move heat sources; cooling events set the fan output of a zone. */
 @Component
 public class LiveEventHandler implements SimulatorEventHandler {
 
     private static final Logger log = LoggerFactory.getLogger(LiveEventHandler.class);
 
     private final WorkloadLoads loads;
+    private final CoolingInputs cooling;
 
-    public LiveEventHandler(WorkloadLoads loads) {
+    public LiveEventHandler(WorkloadLoads loads, CoolingInputs cooling) {
         this.loads = loads;
+        this.cooling = cooling;
     }
 
     @Override
@@ -37,6 +39,9 @@ public class LiveEventHandler implements SimulatorEventHandler {
 
     @Override
     public void onCoolingUnitState(EventEnvelope<CoolingUnitStateData> event) {
-        log.debug("cooling.unit.state ignored until Phase 6: {}", event.eventId());
+        CoolingUnitStateData d = event.data();
+        boolean applied = cooling.apply(d.zoneId(), d.outputPct(), d.mode(), d.health(), d.seq(), event.occurredAt());
+        log.debug("cooling.unit.state {} output {} seq {} {}", d.zoneId(), d.outputPct(), d.seq(),
+                applied ? "applied" : "ignored");
     }
 }

@@ -1,0 +1,94 @@
+server:
+  port: 8087
+
+spring:
+  application:
+    name: COOLING-CONTROLLER-SERVICE
+  datasource:
+    # Own schema, own user (plan section 7). The password has no default and must come from the environment.
+    url: ${DB_URL:jdbc:mysql://localhost:3306/cooling_db}
+    username: ${DB_USER:cooling}
+    password: ${DB_PASSWORD:${COOLING_DB_PASSWORD:}}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: update   # plan section 3: ddl-auto=update, no Flyway
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+        type:
+          preferred_instant_jdbc_type: TIMESTAMP
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: 5672
+    username: ${RABBITMQ_USER:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+    # Fail fast so a dead broker never holds up the control loop for long.
+    connection-timeout: 1000
+    listener:
+      simple:
+        concurrency: 1
+        max-concurrency: 1     # one consumer keeps zone readings in order
+        prefetch: 10
+  cloud:
+    openfeign:
+      client:
+        config:
+          default:
+            connect-timeout: 1000
+            read-timeout: 3000
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+    registry-fetch-interval-seconds: 3
+  instance:
+    prefer-ip-address: true
+    instance-id: ${spring.application.name}:${random.value}
+    lease-renewal-interval-in-seconds: 3
+    lease-expiration-duration-in-seconds: 9
+
+thermogrid:
+  cooling:
+    scheduling-enabled: true
+    listeners-enabled: true
+    single-instance-lock: true
+    seed-on-startup: true
+    tick-ms: 1000                 # fail-safe watchdog and heartbeat check
+    heartbeat-ms: 5000            # state is re-published at least this often (plan: every 10 s at most)
+    publish-retry-cooldown-ms: 5000
+    default-target-c: 26.0
+    initial-output-pct: 40        # matches the simulator's initial output (decision D-018)
+    default-zones: [Z1, Z2, Z3, Z4]
+    producer: COOLING-CONTROLLER-SERVICE
+    event-version: 1
+    max-list-limit: 500
+    action-retention-hours: 24    # plan section 7
+    retention-interval-ms: 600000
+    amqp:
+      zone-queue-ttl-ms: 30000
+      alert-queue-ttl-ms: 60000
+      queue-max-length: 20000
+    # Plan section 6E. Do not change without recording it in docs/decision-log.md.
+    control:
+      ewma-alpha: 0.5
+      slope-gain: 5.0
+      base: 35.0
+      gain: 12.0
+      floor-normal: 30
+      floor-fault: 60
+      boost-watch: 50
+      boost-warning: 70
+      boost-critical: 100
+      hold-critical-sec: 60
+      hold-warning-sec: 20
+      max-step: 10
+      min-publish-delta: 2
+      failsafe-output: 80
+      failsafe-after-sec: 10
+      recovery-readings: 3
+      fault-confirm-readings: 2
+      ok-confirm-readings: 3
+      stale-reading-sec: 10

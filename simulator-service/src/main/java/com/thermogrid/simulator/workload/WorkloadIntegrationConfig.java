@@ -25,11 +25,17 @@ import org.springframework.context.annotation.Configuration;
 public class WorkloadIntegrationConfig {
 
     public static final String QUEUE = "q.simulator.workloads";
+    public static final String COOLING_QUEUE = "q.simulator.cooling";
     public static final String DEAD_LETTER_QUEUE = "thermogrid.dlq";
 
     @Bean
     WorkloadLoads workloadLoads(Clock clock, WorkloadSyncProperties props) {
         return new WorkloadLoads(clock, props.tombstoneTtlMs());
+    }
+
+    @Bean
+    CoolingInputs coolingInputs() {
+        return new CoolingInputs();
     }
 
     /** Sends the shared internal token on every Feign call when one is configured. */
@@ -85,9 +91,44 @@ public class WorkloadIntegrationConfig {
             return BindingBuilder.bind(simulatorWorkloadQueue).to(eventsExchange).with(RoutingKeys.WORKLOAD_REMOVED);
         }
 
+        /** State queue (plan 8.4): the latest cooling state is all that matters, so messages expire after 60 s. */
+        @Bean
+        Queue simulatorCoolingQueue(WorkloadSyncProperties props) {
+            return QueueBuilder.durable(COOLING_QUEUE).withArguments(Map.of(
+                    "x-message-ttl", 60000,
+                    "x-max-length", props.queueMaxLength(),
+                    "x-overflow", "drop-head",
+                    "x-dead-letter-exchange", Exchanges.DEAD_LETTER)).build();
+        }
+
+        @Bean
+        Binding coolingBinding(Queue simulatorCoolingQueue, TopicExchange eventsExchange) {
+            return BindingBuilder.bind(simulatorCoolingQueue).to(eventsExchange).with(RoutingKeys.COOLING_UNIT_STATE);
+        }
+
+        @Bean
+        CoolingMessageListener coolingMessageListener(SimulatorEventDispatcher dispatcher) {
+            return new CoolingMessageListener(dispatcher);
+        }
+
         @Bean
         WorkloadMessageListener workloadMessageListener(SimulatorEventDispatcher dispatcher) {
             return new WorkloadMessageListener(dispatcher);
+        }
+    }
+
+    /** Hands each cooling.unit.state message to the dispatcher. */
+    public static class CoolingMessageListener {
+
+        private final SimulatorEventDispatcher dispatcher;
+
+        public CoolingMessageListener(SimulatorEventDispatcher dispatcher) {
+            this.dispatcher = dispatcher;
+        }
+
+        @RabbitListener(queues = COOLING_QUEUE)
+        public void onMessage(Message message) {
+            dispatcher.dispatch(message.getMessageProperties().getReceivedRoutingKey(), message.getBody());
         }
     }
 

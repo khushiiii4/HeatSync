@@ -238,7 +238,7 @@ class WorkloadDrivenLoadTest {
     @Test
     void listenerAppliesAssignedAndRemovedMessages() throws Exception {
         ObjectMapper mapper = new ObjectMapper().registerModule(new JavaTimeModule());
-        var dispatcher = new SimulatorEventDispatcher(mapper, new LiveEventHandler(loads));
+        var dispatcher = new SimulatorEventDispatcher(mapper, new LiveEventHandler(loads, new com.thermogrid.simulator.workload.CoolingInputs()));
         var listener = newListener(dispatcher);
         loads.reconcile(List.of(), clock.instant());
 
@@ -253,7 +253,7 @@ class WorkloadDrivenLoadTest {
     @Test
     void listenerRejectsMalformedMessagesSoTheyDeadLetter() {
         ObjectMapper mapper = new ObjectMapper().registerModule(new JavaTimeModule());
-        var listener = newListener(new SimulatorEventDispatcher(mapper, new LiveEventHandler(loads)));
+        var listener = newListener(new SimulatorEventDispatcher(mapper, new LiveEventHandler(loads, new com.thermogrid.simulator.workload.CoolingInputs())));
         MessageProperties props = new MessageProperties();
         props.setReceivedRoutingKey("workload.assigned");
         Message bad = MessageBuilder.withBody("{not json".getBytes(StandardCharsets.UTF_8)).andProperties(props).build();
