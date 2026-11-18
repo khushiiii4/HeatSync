@@ -13,7 +13,15 @@ import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.core.QueueBuilder;
 import org.springframework.amqp.core.TopicExchange;
+import com.thermogrid.simulator.config.DeadLetterRecoverer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.amqp.rabbit.config.RetryInterceptorBuilder;
+import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
+import org.springframework.amqp.rabbit.connection.ConnectionFactory;
+import org.springframework.amqp.rabbit.core.RabbitOperations;
+import org.springframework.boot.autoconfigure.amqp.SimpleRabbitListenerContainerFactoryConfigurer;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -27,6 +35,12 @@ public class WorkloadIntegrationConfig {
     public static final String QUEUE = "q.simulator.workloads";
     public static final String COOLING_QUEUE = "q.simulator.cooling";
     public static final String DEAD_LETTER_QUEUE = "thermogrid.dlq";
+    public static final String LOSSLESS_FACTORY = "simulatorLosslessListenerContainerFactory";
+    public static final String STATE_FACTORY = "simulatorStateListenerContainerFactory";
+    static final int RETRY_ATTEMPTS = 3;
+    /** Bounded wait for the broker to confirm a dead-letter republish. */
+    static final long CONFIRM_TIMEOUT_MS = 3000;
+    private static final Logger log = LoggerFactory.getLogger(WorkloadIntegrationConfig.class);
 
     @Bean
     WorkloadLoads workloadLoads(Clock clock, WorkloadSyncProperties props) {
@@ -50,8 +64,9 @@ public class WorkloadIntegrationConfig {
     }
 
     /**
-     * Lossless queue (plan 8.4): durable, bounded, dead-lettered. A message the simulator cannot parse is rejected
-     * without requeue (spring.rabbitmq.listener.simple.default-requeue-rejected=false) and lands in thermogrid.dlq.
+     * Lossless queue (plan 8.4): durable, no TTL, bounded, dead-lettered. A failing message is retried 3 times and
+     * then republished with its failure headers to thermogrid.dlx; a message the simulator cannot parse is not
+     * retried. The cooling queue is a state queue: 60 s TTL and no dead-letter arguments.
      */
     @Configuration
     @ConditionalOnProperty(name = "thermogrid.simulator.workloads.listener-enabled", havingValue = "true",
@@ -97,13 +112,41 @@ public class WorkloadIntegrationConfig {
             return QueueBuilder.durable(COOLING_QUEUE).withArguments(Map.of(
                     "x-message-ttl", 60000,
                     "x-max-length", props.queueMaxLength(),
-                    "x-overflow", "drop-head",
-                    "x-dead-letter-exchange", Exchanges.DEAD_LETTER)).build();
+                    "x-overflow", "drop-head")).build();
         }
 
         @Bean
         Binding coolingBinding(Queue simulatorCoolingQueue, TopicExchange eventsExchange) {
             return BindingBuilder.bind(simulatorCoolingQueue).to(eventsExchange).with(RoutingKeys.COOLING_UNIT_STATE);
+        }
+
+        @Bean
+        DeadLetterRecoverer simulatorDeadLetterRecoverer(RabbitOperations rabbit) {
+            return new DeadLetterRecoverer(rabbit, Exchanges.DEAD_LETTER, RETRY_ATTEMPTS, CONFIRM_TIMEOUT_MS);
+        }
+
+        /** Lossless consumer: 3 attempts (1, 2, 4 s), malformed messages not retried, then dead-lettered. */
+        @Bean(name = LOSSLESS_FACTORY)
+        SimpleRabbitListenerContainerFactory losslessListenerContainerFactory(
+                SimpleRabbitListenerContainerFactoryConfigurer configurer, ConnectionFactory connectionFactory,
+                DeadLetterRecoverer simulatorDeadLetterRecoverer) {
+            SimpleRabbitListenerContainerFactory factory = new SimpleRabbitListenerContainerFactory();
+            configurer.configure(factory, connectionFactory);
+            factory.setDefaultRequeueRejected(false);
+            factory.setAdviceChain(RetryInterceptorBuilder.stateless()
+                    .retryOperations(DeadLetterRecoverer.retryTemplate(RETRY_ATTEMPTS, 1000, 2.0, 4000, null))
+                    .recoverer(simulatorDeadLetterRecoverer).build());
+            return factory;
+        }
+
+        /** State consumer: no retry and no dead-lettering; the listener logs and drops a bad message. */
+        @Bean(name = STATE_FACTORY)
+        SimpleRabbitListenerContainerFactory stateListenerContainerFactory(
+                SimpleRabbitListenerContainerFactoryConfigurer configurer, ConnectionFactory connectionFactory) {
+            SimpleRabbitListenerContainerFactory factory = new SimpleRabbitListenerContainerFactory();
+            configurer.configure(factory, connectionFactory);
+            factory.setDefaultRequeueRejected(false);
+            return factory;
         }
 
         @Bean
@@ -126,9 +169,16 @@ public class WorkloadIntegrationConfig {
             this.dispatcher = dispatcher;
         }
 
-        @RabbitListener(queues = COOLING_QUEUE)
+        @RabbitListener(queues = COOLING_QUEUE, containerFactory = STATE_FACTORY)
         public void onMessage(Message message) {
-            dispatcher.dispatch(message.getMessageProperties().getReceivedRoutingKey(), message.getBody());
+            String key = message.getMessageProperties().getReceivedRoutingKey();
+            try {
+                dispatcher.dispatch(key, message.getBody());
+            } catch (RuntimeException e) {
+                // State queue (plan 8.4): log and drop. The 10 s heartbeat from the controller replaces it.
+                log.warn("Dropping cooling state message {} ({}): {}", message.getMessageProperties().getMessageId(),
+                        key, e.toString());
+            }
         }
     }
 
@@ -141,7 +191,7 @@ public class WorkloadIntegrationConfig {
             this.dispatcher = dispatcher;
         }
 
-        @RabbitListener(queues = QUEUE)
+        @RabbitListener(queues = QUEUE, containerFactory = LOSSLESS_FACTORY)
         public void onMessage(Message message) {
             dispatcher.dispatch(message.getMessageProperties().getReceivedRoutingKey(), message.getBody());
         }

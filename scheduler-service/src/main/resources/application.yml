@@ -24,6 +24,8 @@ spring:
     port: 5672
     username: ${RABBITMQ_USER:guest}
     password: ${RABBITMQ_PASSWORD:guest}
+    # Phase 7: confirmed publishing, needed by the dead-letter republish (DeadLetterRecoverer).
+    publisher-confirm-type: correlated
     connection-timeout: 2000
     listener:
       simple:

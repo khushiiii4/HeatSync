@@ -16,6 +16,7 @@ import org.springframework.amqp.rabbit.retry.RejectAndDontRequeueRecoverer;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.amqp.rabbit.config.ContainerCustomizer;
+import org.springframework.amqp.rabbit.core.RabbitOperations;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.retry.backoff.ExponentialBackOffPolicy;
@@ -37,6 +38,8 @@ public class AmqpConfig {
     public static final String RACK_QUEUE = "q.telemetry.rack-readings";
     public static final String ZONE_QUEUE = "q.telemetry.zone-readings";
     public static final String DEAD_LETTER_QUEUE = "thermogrid.dlq";
+    /** Bounded wait for the broker to confirm a dead-letter republish. */
+    static final long CONFIRM_TIMEOUT_MS = 3000;
 
     @Bean
     public TopicExchange eventsExchange() {
@@ -104,28 +107,31 @@ public class AmqpConfig {
     }
 
     public static RetryTemplate buildRetryTemplate(TelemetryProperties.Amqp cfg, Sleeper sleeper) {
-        // Invalid messages can never succeed: do not retry them. Everything else is retried.
-        SimpleRetryPolicy policy = new SimpleRetryPolicy(cfg.retryAttempts(),
-                Map.of(InvalidReadingException.class, false), true, true);
-        ExponentialBackOffPolicy backOff = new ExponentialBackOffPolicy();
-        backOff.setInitialInterval(cfg.retryInitialMs());
-        backOff.setMultiplier(cfg.retryMultiplier());
-        backOff.setMaxInterval(cfg.retryMaxMs());
-        backOff.setSleeper(sleeper);
-        RetryTemplate template = new RetryTemplate();
-        template.setRetryPolicy(policy);
-        template.setBackOffPolicy(backOff);
-        return template;
+        // Invalid and undeserialisable messages can never succeed: do not retry them. Everything else is retried.
+        return DeadLetterRecoverer.retryTemplate(cfg.retryAttempts(), cfg.retryInitialMs(), cfg.retryMultiplier(),
+                cfg.retryMaxMs(), sleeper, InvalidReadingException.class);
+    }
+
+    /** Republishes an exhausted message to thermogrid.dlx with its failure headers (confirmed), else rejects it. */
+    @Bean
+    DeadLetterRecoverer deadLetterRecoverer(RabbitOperations rabbit, TelemetryProperties props) {
+        return new DeadLetterRecoverer(rabbit, Exchanges.DEAD_LETTER, props.amqp().retryAttempts(),
+                CONFIRM_TIMEOUT_MS, InvalidReadingException.class);
     }
 
     /** Applies the retry advice to the auto-configured listener container factory. */
     @Bean
-    ContainerCustomizer<SimpleMessageListenerContainer> retryContainerCustomizer(RetryTemplate listenerRetryTemplate) {
-        return container -> container.setAdviceChain(retryInterceptor(listenerRetryTemplate));
+    ContainerCustomizer<SimpleMessageListenerContainer> retryContainerCustomizer(RetryTemplate listenerRetryTemplate,
+                                                                              DeadLetterRecoverer recoverer) {
+        return container -> container.setAdviceChain(retryInterceptor(listenerRetryTemplate, recoverer));
     }
 
     public static org.aopalliance.aop.Advice retryInterceptor(RetryTemplate template) {
-        return RetryInterceptorBuilder.stateless().retryOperations(template)
-                .recoverer(new RejectAndDontRequeueRecoverer()).build();
+        return retryInterceptor(template, new RejectAndDontRequeueRecoverer());
+    }
+
+    public static org.aopalliance.aop.Advice retryInterceptor(RetryTemplate template,
+                                                              org.springframework.amqp.rabbit.retry.MessageRecoverer recoverer) {
+        return RetryInterceptorBuilder.stateless().retryOperations(template).recoverer(recoverer).build();
     }
 }

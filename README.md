@@ -6,7 +6,7 @@ ThermoGrid is a software-simulated data center (4 cooling zones, 16 racks) built
 
 ## Current status
 
-Phases 0 to 6 are implemented: infrastructure, contracts, Eureka and the API gateway, topology, the simulator, telemetry with forecasting and alerts, the workload service, the scheduler (thermal-aware placement, migration, reconcile and HOLD mode) and the cooling controller (proportional control, fault detection, fail-safe, modelled energy). Not built yet: authentication, frontend, Phase 7 messaging hardening. Start services consumers-first (scheduler and cooling controller before the simulator and workload services). See [docs/status.md](docs/status.md) for evidence per item and [docs/decision-log.md](docs/decision-log.md) for decisions.
+Phases 0 to 7 are implemented: infrastructure, contracts, Eureka and the API gateway, topology, the simulator, telemetry with forecasting and alerts, the workload service, the scheduler (thermal-aware placement, migration, reconcile and HOLD mode) and the cooling controller (proportional control, fault detection, fail-safe, modelled energy). Phase 7 hardened RabbitMQ (queue policies, retry and dead-lettering, publisher confirms, idempotency, startup script). Not built yet: frontend, authentication, deployment. Start everything in the right order with `scripts/start-all.sh` (consumers before producers). See [docs/status.md](docs/status.md) for evidence per item and [docs/decision-log.md](docs/decision-log.md) for decisions.
 
 ## Modules
 
@@ -170,6 +170,17 @@ Overrides: `DB_URL`, `DB_USER`, `DB_PASSWORD`, `RABBITMQ_HOST`, `RABBITMQ_USER`,
 **Stale sensors.** A rack with no accepted reading for 10 s becomes `STALE` (checked every 2 s). Its forecast and risk stay frozen, active alerts stay active, and nothing is invented. The next newer valid reading restores `OK`.
 
 **Retention** (every 10 minutes, batches of 5,000, at most 20 batches per run): rack and zone readings 6 hours, CLEARED alerts 7 days. ACTIVE alerts and `rack_forecast_state` are never deleted.
+
+## Messaging reliability (Phase 7)
+
+Queues, retry and dead-letter rules, idempotency, publisher reliability and operating procedures are in [docs/messaging.md](docs/messaging.md). In short:
+
+- **Lossless queues** (`q.telemetry.rack-readings`, `q.telemetry.zone-readings`, `q.scheduler.workloads`, `q.simulator.workloads`): durable, no TTL, bounded, dead-lettered. A failing message gets 3 attempts (waits of 1 s and 2 s), then goes to `thermogrid.dlq` with its failure headers. Malformed JSON, invalid values and unsupported event versions are dead-lettered at once.
+- **State queues** (`q.cooling.zone-readings` 30 s, `q.cooling.alerts`, `q.scheduler.alerts`, `q.scheduler.cooling`, `q.simulator.cooling` 60 s): short TTL, **no dead-lettering**; a bad message is logged and dropped.
+- **Publishers** use confirms and mandatory publishing; the cooling controller never publishes a state its database does not hold.
+- **Upgrading an existing broker:** the five state queues changed arguments, so each must be deleted once before its service starts (RabbitMQ will not redeclare a queue with different arguments). See "Changing queue arguments" in docs/messaging.md. Nothing deletes queues automatically.
+- **Scripts:** `scripts/start-all.sh` (or `start-all.ps1`) starts MySQL, RabbitMQ and the services in order and waits for each to be ready; `scripts/stop-all.sh` stops what it started; `scripts/test-start-order.sh` checks the order without starting anything; `scripts/verify-queues.sh` checks a live broker against the queue table (read-only).
+- **Live tests:** each consuming service has a `LiveBrokerTest` that is skipped unless `THERMOGRID_LIVE_RABBIT_PORT` is set. Point it only at a throwaway broker, for example `docker run -d -p 127.0.0.1:25672:5672 -e RABBITMQ_DEFAULT_USER=p7test -e RABBITMQ_DEFAULT_PASS=p7test rabbitmq:3.13-management`, then `THERMOGRID_LIVE_RABBIT_PORT=25672 ./mvnw -pl telemetry-service,scheduler-service,cooling-controller-service,simulator-service test`.
 
 ## Repository layout
 

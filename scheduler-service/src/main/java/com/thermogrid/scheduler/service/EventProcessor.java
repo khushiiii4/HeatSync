@@ -40,6 +40,9 @@ public class EventProcessor {
 
     private static final Logger log = LoggerFactory.getLogger(EventProcessor.class);
 
+    /** Only schema version 1 is understood (plan 8.5). */
+    static final int SUPPORTED_VERSION = 1;
+
     /** The message body cannot be parsed or has the wrong shape; retrying cannot help, so it is dead-lettered at once. */
     public static class MalformedEventException extends RuntimeException {
         public MalformedEventException(String message, Throwable cause) {
@@ -89,6 +92,9 @@ public class EventProcessor {
         if (env == null || env.eventId() == null || env.data() == null || env.occurredAt() == null) {
             throw new MalformedEventException("Incomplete " + routingKey + " envelope", null);
         }
+        if (env.version() != SUPPORTED_VERSION) {
+            throw new MalformedEventException("Unsupported " + routingKey + " event version " + env.version(), null);
+        }
         if (!routingKey.equals(env.eventType())) {
             throw new MalformedEventException("Routing key " + routingKey + " does not match eventType "
                     + env.eventType(), null);
@@ -101,6 +107,11 @@ public class EventProcessor {
     }
 
     void onSubmitted(EventEnvelope<WorkloadSubmittedData> e) {
+        WorkloadSubmittedData d = e.data();
+        if (d.workloadId() <= 0 || d.cpuDemand() < 1 || d.cpuDemand() > 100 || d.priority() == null
+                || !java.util.Set.of("LOW", "MEDIUM", "HIGH").contains(d.priority())) {
+            throw new MalformedEventException("Invalid workload.submitted payload: " + d, null);
+        }
         if (!markProcessed(e.eventId().toString())) {
             log.debug("Duplicate workload.submitted {} ignored", e.eventId());
             return;
