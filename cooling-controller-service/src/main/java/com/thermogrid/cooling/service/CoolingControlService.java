@@ -39,8 +39,11 @@ import org.springframework.stereotype.Service;
  * {@code cooling_action} and <b>publish</b> {@code cooling.unit.state}. A 1 s tick runs the fail-safe watchdog and a
  * heartbeat that re-publishes every unit at least every {@code heartbeat-ms}.
  *
- * <p>If the database is down, control continues in memory and the state is still published (cooling must not stop
- * because a log table is unavailable); the failure is logged and persisted again at the next change.
+ * <p>Persist first, publish second, and never publish a state the database does not hold (phase 7). If the write
+ * fails, control continues in memory (cooling must not stop), nothing is published for that change, the unit is marked
+ * persist-pending and the write is retried every tick. Once it succeeds the latest absolute state is published. A state
+ * that was published is therefore always recoverable after a restart, which keeps {@code seq} monotonic for the
+ * simulator (it ignores lower sequence numbers).
  */
 @Service
 public class CoolingControlService {
@@ -76,6 +79,8 @@ public class CoolingControlService {
         String modeBeforeFailsafe = AUTO;
         int manualOutput;
         Instant lastPublishAt;
+        /** True while the latest in-memory state could not be written to the database (and so was not published). */
+        boolean persistPending;
 
         Runtime(CoolingUnit unit, CoolingParams p, Instant start) {
             this.unit = unit;
@@ -98,6 +103,7 @@ public class CoolingControlService {
     private final Map<String, Runtime> units = new LinkedHashMap<>();
     private long acceptedReadings;
     private long rejectedReadings;
+    private long persistFailures;
 
     public CoolingControlService(CoolingUnitRepository unitRepo, CoolingActionRepository actionRepo,
                                  StatePublisher publisher, CoolingProperties props, Clock clock) {
@@ -215,9 +221,9 @@ public class CoolingControlService {
             }
         }
         for (Runtime r : units.values()) {
-            if (r.lastPublishAt == null
+            if (r.persistPending || r.lastPublishAt == null
                     || !now.isBefore(r.lastPublishAt.plusMillis(props.heartbeatMs()))) {
-                saveAndPublish(r, "heartbeat", now);
+                saveAndPublish(r, r.persistPending ? "persistence recovered" : "heartbeat", now);
             }
         }
         meter.advance(now, outputs());
@@ -324,8 +330,13 @@ public class CoolingControlService {
         saveAndPublish(r, why, now);
     }
 
-    /** Persist first, publish second. */
-    private void saveAndPublish(Runtime r, String reason, Instant now) {
+    /**
+     * Persist first, publish second. If the database write fails nothing is published and the unit stays
+     * persist-pending, so the message never claims a state that was not stored.
+     *
+     * @return true if the state was persisted (published or deferred only by a broker problem)
+     */
+    private boolean saveAndPublish(Runtime r, String reason, Instant now) {
         CoolingUnit u = r.unit;
         u.nextSeq();
         u.setUpdatedAt(now);
@@ -333,11 +344,31 @@ public class CoolingControlService {
         try {
             r.unit = unitRepo.saveAndFlush(u);
         } catch (RuntimeException e) {
-            log.warn("Could not persist cooling_unit {}: {} (state is still published)", u.getZoneId(), e.toString());
+            if (!r.persistPending) {
+                log.warn("Could not persist cooling_unit {}: {}. Control continues in memory; nothing is published "
+                        + "until the write succeeds", u.getZoneId(), e.toString());
+            }
+            r.persistPending = true;
+            persistFailures++;
+            return false;
+        }
+        if (r.persistPending) {
+            log.info("Persistence of cooling_unit {} recovered", u.getZoneId());
+            r.persistPending = false;
         }
         r.lastPublishAt = now;
         publisher.publish(new CoolingUnitStateData(u.getZoneId(), u.getMode(), u.getOutputPct(), u.getHealth(),
                 u.getTargetTempC().doubleValue(), reason, u.getSeq()), now);
+        return true;
+    }
+
+    /** True if any unit holds a state the database does not. */
+    public synchronized boolean persistenceDegraded() {
+        return units.values().stream().anyMatch(r -> r.persistPending);
+    }
+
+    public synchronized long persistFailures() {
+        return persistFailures;
     }
 
     private Map<String, Integer> outputs() {

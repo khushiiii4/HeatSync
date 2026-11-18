@@ -13,6 +13,8 @@ import java.time.temporal.ChronoUnit;
 public final class ReadingValidator {
 
     /** Plausible physical range. Anything outside is a sensor or producer bug, not data. */
+    /** Only schema version 1 of the readings is understood (plan 8.5). */
+    static final int SUPPORTED_VERSION = 1;
     static final double MIN_TEMP_C = -50.0;
     static final double MAX_TEMP_C = 150.0;
     static final double MAX_POWER_KW = 999.99;
@@ -68,6 +70,9 @@ public final class ReadingValidator {
         }
         if (env.occurredAt() == null) {
             throw new InvalidReadingException("occurredAt is missing");
+        }
+        if (env.version() != SUPPORTED_VERSION) {
+            throw new InvalidReadingException("Unsupported event version " + env.version());
         }
         if (!expectedType.equals(env.eventType())) {
             throw new InvalidReadingException("eventType " + env.eventType() + " does not match " + expectedType);

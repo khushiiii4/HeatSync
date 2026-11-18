@@ -24,6 +24,9 @@ spring:
     port: 5672
     username: ${RABBITMQ_USER:guest}
     password: ${RABBITMQ_PASSWORD:guest}
+    # Phase 7: the broker confirms every publish and returns unroutable messages (ConfirmingRabbitTemplate).
+    publisher-confirm-type: correlated
+    publisher-returns: true
     connection-timeout: 2000
     listener:
       simple:

@@ -15,14 +15,18 @@ import java.util.concurrent.ConcurrentHashMap;
  * confirmed FAULT as well would double-count the degradation and would latch the fault on (a cleared injection could
  * never produce the OK readings the controller needs to recover).
  *
- * <p>Ordering: a message with a lower {@code seq} than the one applied is dropped unless it is also newer in time,
- * which is what a controller restart with a reset sequence looks like. Duplicates (same seq) are ignored. The last
+ * <p>Ordering (plan 8.6): a message with a lower {@code seq} than the one applied is ignored. The one exception is a
+ * lower {@code seq} that arrives more than {@link #RESET_WINDOW} after the applied message, which is what a
+ * controller restart with a reset sequence (a wiped database) looks like; it is accepted so the zone cannot freeze. Duplicates (same seq) are ignored. The last
  * output is kept for as long as the controller is silent, like a real fan holding its last setpoint.
  */
 public class CoolingInputs implements CoolingSource {
 
     public record Applied(double outputPct, String mode, String health, long seq, Instant occurredAt) {
     }
+
+    /** A lower seq is accepted only if it is this much newer than the applied message (reset after a wipe). */
+    static final java.time.Duration RESET_WINDOW = java.time.Duration.ofSeconds(30);
 
     private final Map<String, Applied> zones = new ConcurrentHashMap<>();
 
@@ -33,8 +37,8 @@ public class CoolingInputs implements CoolingSource {
             return false;
         }
         Applied cur = zones.get(zoneId);
-        if (cur != null && (seq <= cur.seq()) && !occurredAt.isAfter(cur.occurredAt())) {
-            return false;                       // duplicate or out of order
+        if (cur != null && seq <= cur.seq() && !occurredAt.isAfter(cur.occurredAt().plus(RESET_WINDOW))) {
+            return false;                       // duplicate, reordered or replayed: a lower seq is ignored (plan 8.6)
         }
         double clamped = Math.max(0.0, Math.min(100.0, outputPct));
         zones.put(zoneId, new Applied(clamped, mode, health, seq, occurredAt));

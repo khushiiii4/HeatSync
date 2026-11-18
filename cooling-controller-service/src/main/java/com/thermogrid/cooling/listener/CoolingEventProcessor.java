@@ -24,6 +24,9 @@ public class CoolingEventProcessor {
         }
     }
 
+    /** Only schema version 1 is understood (plan 8.5). */
+    static final int SUPPORTED_VERSION = 1;
+
     private final ObjectMapper mapper;
     private final CoolingControlService control;
 
@@ -52,6 +55,9 @@ public class CoolingEventProcessor {
         EventEnvelope<T> env = mapper.readValue(body, type);
         if (env == null || env.eventId() == null || env.data() == null || env.occurredAt() == null) {
             throw new MalformedEventException("Incomplete " + routingKey + " envelope", null);
+        }
+        if (env.version() != SUPPORTED_VERSION) {
+            throw new MalformedEventException("Unsupported " + routingKey + " event version " + env.version(), null);
         }
         if (!routingKey.equals(env.eventType())) {
             throw new MalformedEventException("Routing key " + routingKey + " does not match eventType "

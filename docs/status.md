@@ -1,6 +1,6 @@
 # Status register
 
-Mirrors the checklist in plan section 15.9. An item is Done only when its listed test was run and passed (plan rule 10). Last updated: 2026-11-18, end of Phase 6.
+Mirrors the checklist in plan section 15.9. An item is Done only when its listed test was run and passed (plan rule 10). Last updated: 2026-11-19, end of Phase 7.
 
 ## Phase 0: Environment and repository setup
 
@@ -60,9 +60,9 @@ Phase 0 is not closed: the branch has not been pushed or merged, and the full-te
 | Phase 3 acceptance: degrading Z2 produces a PREDICTED WARNING alert and event | Done | Runtime: COOLING_DEGRADED 0.25 on Z2 gave a PREDICTED WARNING on R23 at 32.04 C (forecast 34.01), 25 ticks (50 s) before a rack observed 34 C. Event seen on `thermal.alert.#` |
 | Telemetry reached through the gateway | Not verified | Gateway not started; the port 8080 conflict is unchanged |
 
-## Phases 4 to 13
+## Phases 8 to 13
 
-All Pending. Nothing from these phases has been started.
+All Pending. Phases 4 to 7 are documented in their own sections below.
 
 ## Documentation
 
@@ -142,6 +142,28 @@ Live runs (real MySQL, RabbitMQ, Eureka, topology, simulator, telemetry, workloa
 - **Scenario 5, cooling adjustment.** After both failures were cleared the output stayed at 70 while the alert level fell, the `hold_until` showed a 20 s hold, it was released to 60 and 30, and it settled at 39 to 47 percent with the zone at 26.3 to 26.9 C. Over 500 recorded actions the largest AUTO step was 10 points and the smallest 2. **Not observed:** a boost that is actually larger than the temperature term (WATCH 50, WARNING 70, CRITICAL 100 acting alone); at 30 C and above the raw term already exceeds the boosts, so those paths are covered by unit tests only. A 60 s CRITICAL hold was not observed live.
 - **Scenario 6, cooling failure in Z3.** `COOLING_FAILURE` on Z3: FAULT confirmed 4.1 s later, the floor of all units rose to 60 and healthy zones climbed to 60 in 10-point steps, the scheduler stored Z3 as FAULT within a second and made 8 COOLING_FAILURE moves in two cycles (4 per cycle; LOW jobs first, then MEDIUM, then HIGH) emptying Z3, none into Z3. A job submitted afterwards went to R41. Z3 racks stayed at 25.6 to 26.0 C because they were drained at once. After clearing, Z3 and the scheduler showed OK and all floors returned to 30 after 6.1 s (3 OK readings). The plan's expectation of Z3 temperatures peaking near 30 C was not reproduced because the drain completed before the racks warmed.
 - **Controller behaviour at steady state.** The output moves by 2 to 5 points around the setpoint every few seconds (about 585 `cooling_action` rows in roughly 25 minutes); this is the proportional law reacting to noise and is within the 24 h retention. No constants were changed.
+
+## Phase 7: RabbitMQ integration hardening
+
+| Item | Status | Evidence / note |
+|------|--------|-----------------|
+| Exchanges `thermogrid.events` and `thermogrid.dlx`, queue `thermogrid.dlq` bound with `#` | Done | Topology unit tests in telemetry, scheduler, cooling and simulator; live: `scripts/verify-queues.sh` on the throwaway broker |
+| Lossless queues: durable, no TTL, bounded, dead-lettered | Done | Unit tests per service; verified on a live broker (see below) |
+| State queues: TTL, no dead-letter arguments | Done in code | Unit tests per service. **The shared development broker still holds the old declarations (D-069); see the migration procedure in docs/messaging.md. Not migrated: nothing was deleted** |
+| Retry: 3 attempts, waits 1 s and 2 s (D-068), permanent errors not retried | Done | `DeadLetterRecovererTest` in 3 services. Live: transient failure dead-lettered 3.05 to 3.09 s after publication with `x-retry-attempts`=3, 3 handler invocations |
+| Malformed JSON, invalid values, unsupported version dead-lettered at once | Done | Live (telemetry, scheduler, simulator): 27 to 142 ms, `x-retry-attempts`=1 |
+| State-queue poison dropped, not dead-lettered | Done | Live (scheduler, cooling, simulator): `thermogrid.dlq` empty and queues drained after poison messages |
+| Dead-letter republish with failure headers, fallback reject if the republish fails | Done | Unit tests (headers, confirm, fallback); live: headers observed |
+| DLQ replay | Done (telemetry) | Live: a dead-lettered reading was replayed through `thermogrid.events` with its `x-original-routing-key` and stored once; a second replay added no row. Replay through the management UI itself was not clicked; the documented UI procedure publishes the same way |
+| Publisher confirms and returns (`ConfirmingRabbitTemplate`) in telemetry, workload, simulator, cooling | Done | 2 unit tests per service. A real nack or unroutable return was not provoked on a live broker |
+| Idempotency, every row of plan 8.6 | Done | Pre-existing tests plus live checks: duplicate telemetry readings give 1 row; 3 deliveries of one `workload.submitted` give 1 `processed_event` and 1 trigger; 3 deliveries of one `workload.assigned` give 1 workload; simulator ignores cooling seq 9 after 10 (D-077). Cooling-controller reading gate and workload `migrationId` are covered by existing tests (not re-run live) |
+| Cooling database-outage correction | Done | `DatabaseOutageTest` (5): nothing published while the write fails, recovery publishes the stored state, seq never goes back, a broker failure is separate. Not exercised against a real MySQL outage |
+| Consumers reconnect after a broker restart | Done (telemetry) | Live: `docker restart` of the throwaway broker, then a reading was consumed. Not repeated for the other services (same Spring AMQP mechanism) |
+| scripts/start-all.sh, stop-all.sh, PowerShell twins, test-start-order.sh, verify-queues.sh | Order done; full start not run | `test-start-order.sh` passes (dry run: order, Eureka readiness checks, no secrets). A real start of all nine components was **not** run against the shared dev broker because of the queue-argument conflict. PowerShell scripts were not executed |
+| docs/messaging.md, README, decision log D-067 to D-077 | Done | |
+| Phase 7 acceptance | Met in code and on a throwaway broker | Open: migrate the dev broker, then run `scripts/start-all.sh` end to end |
+
+Live broker checks used a temporary `rabbitmq:3.13-management` container with an in-memory H2 database per service (D-076); the shared broker and MySQL were not touched.
 
 ## Optional (plan section 2 cut list and 15.5)
 

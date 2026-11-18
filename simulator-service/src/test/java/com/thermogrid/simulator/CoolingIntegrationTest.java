@@ -101,6 +101,8 @@ class CoolingIntegrationTest {
         assertThat(cooling.apply("Z2", 70, "AUTO", "OK", 5, T0)).isTrue();
         assertThat(cooling.apply("Z2", 70, "AUTO", "OK", 5, T0)).isFalse();                // duplicate
         assertThat(cooling.apply("Z2", 30, "AUTO", "OK", 4, T0.minusSeconds(2))).isFalse(); // older seq and time
+        assertThat(cooling.apply("Z2", 30, "AUTO", "OK", 4, T0.plusSeconds(2))).isFalse();  // lower seq, newer, within 30 s
+        assertThat(cooling.apply("Z2", 30, "AUTO", "OK", 4, T0.plusSeconds(30))).isFalse(); // the window is exclusive
         assertThat(cooling.outputPct("Z2").getAsDouble()).isEqualTo(70.0);
         assertThat(cooling.apply("Z2", 80, "AUTO", "OK", 6, T0.plusSeconds(2))).isTrue();
         assertThat(cooling.outputPct("Z2").getAsDouble()).isEqualTo(80.0);
@@ -188,6 +190,8 @@ class CoolingIntegrationTest {
         MessageProperties props = new MessageProperties();
         props.setReceivedRoutingKey("cooling.unit.state");
         Message bad = MessageBuilder.withBody("{oops".getBytes()).andProperties(props).build();
-        assertThatThrownBy(() -> listener.onMessage(bad)).isInstanceOf(IllegalArgumentException.class);
+        // Phase 7: a state queue drops a bad message (logged) instead of retrying or dead-lettering it.
+        listener.onMessage(bad);
+        assertThat(cooling.get("Z2").get().seq()).isEqualTo(1042);
     }
 }
