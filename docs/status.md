@@ -1,6 +1,6 @@
 # Status register
 
-Mirrors the checklist in plan section 15.9. An item is Done only when its listed test was run and passed (plan rule 10). Last updated: 2026-11-19, end of Phase 7.
+Mirrors the checklist in plan section 15.9. An item is Done only when its listed test was run and passed (plan rule 10). Last updated: 2026-11-19, Phase 7 integration checkpoint.
 
 ## Phase 0: Environment and repository setup
 
@@ -149,7 +149,7 @@ Live runs (real MySQL, RabbitMQ, Eureka, topology, simulator, telemetry, workloa
 |------|--------|-----------------|
 | Exchanges `thermogrid.events` and `thermogrid.dlx`, queue `thermogrid.dlq` bound with `#` | Done | Topology unit tests in telemetry, scheduler, cooling and simulator; live: `scripts/verify-queues.sh` on the throwaway broker |
 | Lossless queues: durable, no TTL, bounded, dead-lettered | Done | Unit tests per service; verified on a live broker (see below) |
-| State queues: TTL, no dead-letter arguments | Done in code | Unit tests per service. **The shared development broker still holds the old declarations (D-069); see the migration procedure in docs/messaging.md. Not migrated: nothing was deleted** |
+| State queues: TTL, no dead-letter arguments | Done | Unit tests per service. Dev broker migrated on 2026-11-19 (see checkpoint below): the five obsolete queues were empty, deleted, and redeclared by the services; `scripts/verify-queues.sh` reports OK for all nine queues and the DLQ |
 | Retry: 3 attempts, waits 1 s and 2 s (D-068), permanent errors not retried | Done | `DeadLetterRecovererTest` in 3 services. Live: transient failure dead-lettered 3.05 to 3.09 s after publication with `x-retry-attempts`=3, 3 handler invocations |
 | Malformed JSON, invalid values, unsupported version dead-lettered at once | Done | Live (telemetry, scheduler, simulator): 27 to 142 ms, `x-retry-attempts`=1 |
 | State-queue poison dropped, not dead-lettered | Done | Live (scheduler, cooling, simulator): `thermogrid.dlq` empty and queues drained after poison messages |
@@ -159,11 +159,21 @@ Live runs (real MySQL, RabbitMQ, Eureka, topology, simulator, telemetry, workloa
 | Idempotency, every row of plan 8.6 | Done | Pre-existing tests plus live checks: duplicate telemetry readings give 1 row; 3 deliveries of one `workload.submitted` give 1 `processed_event` and 1 trigger; 3 deliveries of one `workload.assigned` give 1 workload; simulator ignores cooling seq 9 after 10 (D-077). Cooling-controller reading gate and workload `migrationId` are covered by existing tests (not re-run live) |
 | Cooling database-outage correction | Done | `DatabaseOutageTest` (5): nothing published while the write fails, recovery publishes the stored state, seq never goes back, a broker failure is separate. Not exercised against a real MySQL outage |
 | Consumers reconnect after a broker restart | Done (telemetry) | Live: `docker restart` of the throwaway broker, then a reading was consumed. Not repeated for the other services (same Spring AMQP mechanism) |
-| scripts/start-all.sh, stop-all.sh, PowerShell twins, test-start-order.sh, verify-queues.sh | Order done; full start not run | `test-start-order.sh` passes (dry run: order, Eureka readiness checks, no secrets). A real start of all nine components was **not** run against the shared dev broker because of the queue-argument conflict. PowerShell scripts were not executed |
+| scripts/start-all.sh, stop-all.sh, PowerShell twins, test-start-order.sh, verify-queues.sh | Done (bash); PowerShell not run | `start-all.sh` started eight of nine services in the documented order, each ready in Eureka. The ninth, api-gateway, was refused because port 8080 is held by an unrelated Windows process (AgentService.exe); see checkpoint. The PowerShell scripts were not executed |
 | docs/messaging.md, README, decision log D-067 to D-077 | Done | |
-| Phase 7 acceptance | Met in code and on a throwaway broker | Open: migrate the dev broker, then run `scripts/start-all.sh` end to end |
+| Phase 7 acceptance | Met | Merged to main as PR #6 (merge commit 12f8374). Integration checkpoint below passed, with the gaps listed there |
 
 Live broker checks used a temporary `rabbitmq:3.13-management` container with an in-memory H2 database per service (D-076); the shared broker and MySQL were not touched.
+
+### Phase 7 integration checkpoint (2026-11-19, on main at 12f8374)
+
+* **Merge:** `57481a9` is an ancestor of `origin/main`; PR #6 merged.
+* **Migration:** the five queues named in docs/messaging.md (`q.cooling.zone-readings`, `q.cooling.alerts`, `q.scheduler.alerts`, `q.scheduler.cooling`, `q.simulator.cooling`) held 0 messages and had no consumers, so per the documented procedure only those five were deleted. `thermogrid.dlq` (4 old messages) and the lossless queues were not touched and the DLQ count is unchanged.
+* **Startup:** `scripts/start-all.sh` brought up MySQL, RabbitMQ, eureka, topology, telemetry, workload, scheduler, cooling, simulator in order, all UP in Eureka. No `PRECONDITION_FAILED` in any log. api-gateway could not start through the script: port 8080 belongs to an unrelated Windows process, which was not killed. The gateway was started by hand with `SERVER_PORT=18080` (the port is hard-coded in `api-gateway/application.yml`, the script has no override). Not a code defect, but a local-environment conflict to resolve.
+* **Broker:** `verify-queues.sh` OK for all nine queues and the DLQ binding; every queue had its expected consumer count (telemetry rack-readings 2, the rest 1).
+* **End to end through the gateway (security is off until phase 9):** topology 4 zones / 16 racks; simulator state ticking; telemetry latest for 16 racks with forecasts; workload `seed-demo` created 36 workloads, all RUNNING; a 15 kW HEAT_SPIKE on R23 raised an ACTIVE alert (WATCH, later WARNING forecast), the scheduler applied two THERMAL_WARNING migrations off R23, and the cooling controller raised Z2 output from 30 to 77 percent then back to 54 percent as the spike ended. Spike expired after 120 s.
+* **Maven:** `mvnw clean verify` from the root: BUILD SUCCESS, all 11 modules, 495 tests, 0 failures, 0 errors, 15 skipped (the broker-gated `LiveBrokerTest` classes). Those 15 were then run separately against a throwaway RabbitMQ container (shared broker not used): telemetry 5, scheduler 4, cooling 2, simulator 4, all passed. The first attempt failed with connection refused because the test started before the freshly created broker accepted AMQP connections (a wait-loop mistake in the run, not a product defect); it passed on rerun once the broker had settled. No test was skipped or changed to make it pass.
+* **Not tested (gaps):** a real publisher nack and an unroutable return on a live broker (unit tests only); a real MySQL outage (unit-level `DatabaseOutageTest` only); broker restart reconnect for services other than telemetry; DLQ replay through the management UI; the PowerShell scripts; api-gateway under `start-all.sh` (port conflict). The `LiveBrokerTest` start-up race above means these tests need the broker to be fully ready; a wait-for-ready step is advisable in CI.
 
 ## Optional (plan section 2 cut list and 15.5)
 
