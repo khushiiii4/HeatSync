@@ -12,7 +12,7 @@ import { fmtClock } from '../lib/format';
 import { hasRole } from '../lib/roles';
 
 const FAILURE_TYPES = {
-  COOLING_DEGRADED: { label: 'Degrade cooling', target: 'zone', param: { label: 'Remaining efficiency (0–1)', def: 0.25, min: 0.05, max: 0.95, step: 0.05 }, icon: Wind, tone: 'warn',
+  COOLING_DEGRADED: { label: 'Degrade cooling', target: 'zone', param: { label: 'Remaining efficiency (0–1)', def: 0.15, min: 0.05, max: 0.95, step: 0.05 }, icon: Wind, tone: 'warn',
     effect: 'The zone keeps only a fraction of its cooling effectiveness. Racks warm, telemetry raises a PREDICTED alert, the controller pushes output towards 100% and the scheduler moves low-priority work away.' },
   COOLING_FAILURE: { label: 'Fail cooling unit', target: 'zone', icon: ZapOff, tone: 'crit',
     effect: 'The unit stops cooling entirely. After two readings the controller marks it FAULT, the other zones raise their floor to 60% and the scheduler drains the zone, low priority first.' },
@@ -26,7 +26,7 @@ const ZONES = ['Z1', 'Z2', 'Z3', 'Z4'];
 const RACKS = ZONES.flatMap((z, zi) => [1, 2, 3, 4].map((c) => `R${zi + 1}${c}`));
 
 const PRESETS = [
-  { id: 'degrade-z2', scenario: 'Scenarios 2 – 5', title: 'Degrade cooling in Z2', body: 'Z2 racks warm; watch the forecast alert, the cooling climb and the migrations. Clear it to see the boost released.', req: { type: 'COOLING_DEGRADED', targetId: 'Z2', param: 0.25, durationSec: 0 } },
+  { id: 'degrade-z2', scenario: 'Scenarios 2 – 5', title: 'Degrade cooling in Z2', body: 'Z2 racks warm; watch the forecast alert, the cooling climb and the migrations. Clear it to see the boost released.', req: { type: 'COOLING_DEGRADED', targetId: 'Z2', param: 0.15, durationSec: 0 } },
   { id: 'fail-z3', scenario: 'Scenario 6', title: 'Fail the cooling unit in Z3', body: 'Fault detection, other zones lift their floor to 60%, Z3 is drained and refused as a destination.', req: { type: 'COOLING_FAILURE', targetId: 'Z3', durationSec: 0 } },
   { id: 'drop-r23', scenario: 'Stale sensor', title: 'Drop the sensor on R23', body: 'R23 turns stale and grey within about 10 seconds and receives no new work.', req: { type: 'SENSOR_DROPOUT', targetId: 'R23', durationSec: 0 } },
 ];
@@ -50,7 +50,7 @@ export default function ControlRoom() {
 
   const [pending, setPending] = useState(null); // { title, body, confirmLabel, tone, run }
   const [busy, setBusy] = useState(false);
-  const [custom, setCustom] = useState({ type: 'COOLING_DEGRADED', targetId: 'Z2', param: 0.25, durationSec: 0 });
+  const [custom, setCustom] = useState({ type: 'COOLING_DEGRADED', targetId: 'Z2', param: 0.15, durationSec: 0 });
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['failures'] });

@@ -1,6 +1,6 @@
 # Status register
 
-Mirrors the checklist in plan section 15.9. An item is Done only when its listed test was run and passed (plan rule 10). Last updated: 2026-11-19, Phase 10 (integration testing).
+Mirrors the checklist in plan section 15.9. An item is Done only when its listed test was run and passed (plan rule 10). Last updated: 2026-11-19, Phase 11 (failure testing).
 
 ## Phase 0: Environment and repository setup
 
@@ -252,3 +252,15 @@ Source: plan section 12 and roadmap Phase 10 (decisions D-091, D-092). Full deta
 | `docs/testing.md` | Done | Real results, not-run list and deviations |
 | Scenarios 6 to 9, scaling (I-07), instance stop (I-08), k6 and flood | Not run | Phases 11 and 12 |
 | Branch merged | Pending | Local commit only; not pushed |
+
+## Phase 11: Failure testing
+
+Source: plan section 10, roadmap Phase 11 (D-093, D-094). Detail and timings: `docs/testing.md` section 7.
+
+| Item | Status | Evidence / note |
+|------|--------|-----------------|
+| `scripts/failure-tests.sh`: scenarios 1 to 9, F-02, F-03 with reset between scenarios | Done | Three consecutive full passes, 59 passed and 0 failed each |
+| Scenarios 3 and 4 reproducible | Done after calibration | First run 57/59: scenario 2 at 0.25 never reached WARNING. Preset and script now use 0.15 (D-093); alert after 44 to 63 s, migration applied in all three passes |
+| Scenario 6 (Z3 failure), 7 and 8 (scheduler), 9 (telemetry), F-02, F-03 | Done | See testing.md section 7 |
+| `stop-all.sh <service>` | Done | D-094 |
+| Not done | | I-07 and k6 load (Phase 12); a row-level check that no reading was lost; browser re-check of stale badges |

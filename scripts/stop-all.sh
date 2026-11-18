@@ -20,7 +20,9 @@ stop_tree() {   # stop_tree PID : stop the mvnw wrapper and its java child
   return 0
 }
 
+ONLY=" $* "   # optional: scripts/stop-all.sh scheduler-service  stops only the named services (failure tests)
 for name in "${ORDER[@]}"; do
+  [ "$#" -eq 0 ] || case "$ONLY" in *" $name "*) ;; *) continue ;; esac
   pidfile="$RUN_DIR/$name.pid"
   [ -f "$pidfile" ] || continue
   pid="$(cat "$pidfile")"
