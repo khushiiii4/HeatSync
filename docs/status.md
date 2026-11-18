@@ -1,6 +1,6 @@
 # Status register
 
-Mirrors the checklist in plan section 15.9. An item is Done only when its listed test was run and passed (plan rule 10). Last updated: 2026-11-18, end of Phase 3.
+Mirrors the checklist in plan section 15.9. An item is Done only when its listed test was run and passed (plan rule 10). Last updated: 2026-11-18, end of Phase 4.
 
 ## Phase 0: Environment and repository setup
 
@@ -39,7 +39,8 @@ Phase 0 is not closed: the branch has not been pushed or merged, and the full-te
 | simulator-service: H2 failure_injection table and exclusive file lock (Bundle 2.3) | Done | Tests: schema, persistence across close and reopen, a second JVM is rejected while the first holds the file. Runtime: a second simulator on the same directory exited with the clear message; failures survived a restart |
 | simulator-service: FailureRegistry, four failure types, failure and control endpoints (Bundle 2.3) | Done | Validation, expiry, clearing, history retention, RESET and each failure's effect are unit and API tested. Runtime: a cooling failure on Z2 gave FAULT, fan 0 and rising temperatures; clearing restored OK and 40 |
 | simulator-service: RabbitMQ publishing of rack and zone readings (Bundle 2.3) | Done | 16 rack + 4 zone events per tick on `thermogrid.events`, seen through a temporary queue bound to `telemetry.#` (deleted afterwards). Broker-unreachable behaviour is unit tested and was also run once against a closed port: ticks continued, one warning per cooldown |
-| simulator-service: listeners for workload.assigned, workload.removed, cooling.unit.state | Deferred | Contract mapping and a logging handler exist; no queues or consumers until Phase 4 and Phase 6 |
+| simulator-service: listeners for workload.assigned, workload.removed | Done in Phase 4 | See Phase 4 below |
+| simulator-service: listener for cooling.unit.state | Deferred | No queue or consumer until Phase 6 |
 | simulator-service: POST /api/sim/flood | Deferred | Load-test work (Phase 11) |
 | Phase 2 acceptance: readings on the exchange, temperatures settle, an injected failure changes the readings, re-seeding adds no duplicates | Done, with one gap | Each part was tested or observed. The "stable for 10 minutes" run was not performed |
 
@@ -71,6 +72,22 @@ All Pending. Nothing from these phases has been started.
 | docs/decision-log.md | Written |
 | docs/status.md | Written |
 | docs/architecture.md, api.md, events.md, database.md, demo-script.md, testing.md, performance.md, calibration.md | Placeholders only |
+
+## Phase 4: Workload service and simulator integration
+
+| Item | Status | Evidence / note |
+|------|--------|-----------------|
+| workload-service on 8085, Eureka registration, `workload_db`, lifecycle PENDING / RUNNING / REMOVED | Done | Runtime: registered as WORKLOAD-SERVICE; `SHOW CREATE TABLE workload` on the real MySQL matches plan section 7 (plus enum CHECK constraints added by Hibernate) |
+| Public endpoints: submit, bulk, list, get, delete, summary, seed-demo | Done | 8 API tests on H2 (validation 400s, filters, summary arithmetic, soft delete, seed idempotency) |
+| Internal list and assignment endpoint | Done | 11 tests: first placement, migration, stale version 409, wrong source 409, repeated migrationId returns the same body with no change and no event, REMOVED 422, unknown 404, bad input 400, 6 concurrent callers on one version give exactly one 200 |
+| workload.submitted / assigned / removed published only after commit | Done | 6 tests: nothing sent while the transaction is open, nothing after rollback, retry and give-up behaviour, DB change kept when the broker is down |
+| Demo seed layout | Done | Test asserts 36 workloads, 10 to 30 units each, 720 total, Z2 racks 75 to 90 with a LOW job each, other racks 25 to 40. Runtime on MySQL: same |
+| Retention of REMOVED workloads (7 days) and optional internal token | Done | 2 tests. Not run for 7 real days |
+| Simulator: heat sources driven by workload events, startup bootstrap, 60 s reconcile | Done | 16 new tests (registry rules, engine, capacity cap, listener, malformed message, bootstrap and outage handling). The 96 existing simulator tests are unchanged and green |
+| Phase 4 acceptance: a manual assignment visibly changes rack temperatures | Done | Runtime (real MySQL, RabbitMQ, Eureka, topology, workload, simulator): after the seed, moving batch-etl-7 from R23 to R41 changed CPU 85 to 55 and 35 to 65 on the next tick, and temperatures moved 27.04 to 25.90 and 24.01 to 25.54 within 64 s. The replay returned the same body, a stale call 409, an assignment of the removed workload 422 |
+| Reconciliation and bootstrap at runtime | Done | A database-only change (no event) was picked up within the 60 s window; a restarted simulator loaded 35 running workloads. A malformed message published on the exchange reached `thermogrid.dlq` once (purged afterwards) |
+| Workload reached through the gateway | Not verified | Gateway not started; the port 8080 conflict is unchanged |
+| Telemetry and alert behaviour with workload-driven load | Not verified | Telemetry was not started in this phase; Z2 settle temperatures with the 720-unit layout were not measured against the 30/34/38 C thresholds |
 
 ## Optional (plan section 2 cut list and 15.5)
 

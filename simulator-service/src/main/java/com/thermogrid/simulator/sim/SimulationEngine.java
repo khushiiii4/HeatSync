@@ -45,15 +45,23 @@ public class SimulationEngine {
     private final Clock clock;
     private final FailureSource failures;
     private final TickPublisher publisher;
+    private final LoadSource loads;
 
     @Autowired
     public SimulationEngine(RackGrid grid, PhysicsModel model, SimState state, Clock clock, FailureRegistry failures,
-                            ObjectProvider<TickPublisher> publisher) {
-        this(grid, model, state, clock, failures, publisher.getIfAvailable(() -> TickPublisher.NONE));
+                            ObjectProvider<TickPublisher> publisher, ObjectProvider<LoadSource> loads) {
+        this(grid, model, state, clock, failures, publisher.getIfAvailable(() -> TickPublisher.NONE),
+                loads.getIfAvailable(() -> LoadSource.STATIC));
     }
 
     public SimulationEngine(RackGrid grid, PhysicsModel model, SimState state, Clock clock, FailureSource failures,
                             TickPublisher publisher) {
+        this(grid, model, state, clock, failures, publisher, LoadSource.STATIC);
+    }
+
+    public SimulationEngine(RackGrid grid, PhysicsModel model, SimState state, Clock clock, FailureSource failures,
+                            TickPublisher publisher, LoadSource loads) {
+        this.loads = loads;
         this.grid = grid;
         this.model = model;
         this.state = state;
@@ -95,6 +103,7 @@ public class SimulationEngine {
             }
         }
 
+        Map<String, Double> workloadLoads = loads.rackLoads();
         Map<String, RackState> next = new LinkedHashMap<>();
         for (RackSpec rack : grid.racks()) {
             RackState cur = prev.racks().get(rack.id());
@@ -104,10 +113,14 @@ public class SimulationEngine {
             }
             ZoneState zone = zones.get(rack.zoneId());
             double spike = spikes.getOrDefault(rack.id(), 0.0);
-            double power = model.powerKw(rack, cur.cpuUnits(), spike);
+            // Workload-driven heat: the sum of the running workloads on the rack, never above its capacity (the
+            // telemetry contract caps cpuLoadPct at 100). Static configured load until workload data is loaded.
+            double cpu = workloadLoads == null ? cur.cpuUnits()
+                    : Math.min(workloadLoads.getOrDefault(rack.id(), 0.0), rack.cpuCapacity());
+            double power = model.powerKw(rack, cpu, spike);
             double f = model.effectiveness(zone.outputPct(), zone.health(), zone.healthFactorOverride());
             double t = model.nextTemperature(cur.tempC(), power, f, neighbourMean(rack, prev));
-            next.put(rack.id(), new RackState(t, cur.cpuUnits(), power, spike));
+            next.put(rack.id(), new RackState(t, cpu, power, spike));
         }
         Snapshot committed = new Snapshot(prev.tick() + 1, now, next, zones);
         state.replace(committed);
