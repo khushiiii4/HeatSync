@@ -6,7 +6,7 @@ ThermoGrid is a software-simulated data center (4 cooling zones, 16 racks) built
 
 ## Current status
 
-Phase 0 (environment and repository setup) is in progress. The repository currently contains the Maven multi-module skeleton only: no service code, infrastructure or frontend exists yet. See [docs/status.md](docs/status.md).
+Phase 0 (environment and repository setup) is in progress. The repository contains the Maven multi-module skeleton and the development infrastructure (MySQL and RabbitMQ). No service code or frontend exists yet. See [docs/status.md](docs/status.md).
 
 ## Modules
 
@@ -17,7 +17,8 @@ Phase 0 (environment and repository setup) is in progress. The repository curren
 - JDK 17 or newer (built and checked with JDK 22; release target is 17)
 - Git
 - Maven is optional: use the included wrapper (`mvnw`), which downloads Maven 3.9.16 on first run
-- Not needed yet: Node 18+, Docker (required from later bundles and phases)
+- Docker Desktop with Compose v2 (for MySQL and RabbitMQ)
+- Not needed yet: Node 18+
 
 Versions pinned: Spring Boot 3.5.16, Spring Cloud 2025.0.3 (see [docs/decision-log.md](docs/decision-log.md)).
 
@@ -39,14 +40,25 @@ Expected: BUILD SUCCESS with 11 reactor entries (parent plus 10 modules).
 
 ## Configuration
 
-Copy `.env.example` to `.env` and replace the placeholders. `.env` is git-ignored. Nothing reads it yet. Secrets must never be committed.
+Copy `.env.example` to `.env` and replace every `CHANGE_ME` placeholder. `.env` is git-ignored. Secrets must never be committed. Avoid `'` and `\` in passwords only if you edit `02-users.sh`; it escapes them, but keep passwords simple.
+
+## Development infrastructure
+
+Start MySQL 8.4 and RabbitMQ 3.13 from the repository root:
+
+```n docker compose --env-file .env -f infra/docker-compose.yml up -d
+ docker compose --env-file .env -f infra/docker-compose.yml ps
+```n
+- MySQL: `127.0.0.1:3306`. Six schemas (`auth_db`, `topology_db`, `telemetry_db`, `workload_db`, `scheduler_db`, `cooling_db`), each with its own user (`auth`, `topology`, `telemetry`, `workload`, `scheduler`, `cooling`) granted on that schema only.
+- RabbitMQ: AMQP `127.0.0.1:5672`, management UI http://127.0.0.1:15672 (login from `RABBITMQ_USER` / `RABBITMQ_PASSWORD`).
+- Init scripts in `infra/mysql/init` run only on a fresh volume. To re-initialise: `docker compose --env-file .env -f infra/docker-compose.yml down -v` (deletes all data) then `up -d`.
 
 ## Repository layout
 
 ```
 pom.xml            parent POM
 docs/              status register, decision log, diagrams, doc placeholders
-infra/             (empty) Docker, MySQL and nginx config arrive in later bundles
+infra/             docker-compose.yml (MySQL, RabbitMQ), mysql/init; nginx and env arrive later
 scripts/           (empty) helper scripts arrive in later phases
 <module>/          one directory per Maven module
 ```
