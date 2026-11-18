@@ -1,0 +1,19 @@
+# Test profile: in-memory H2 (MySQL mode), never the developer scheduler_db; no broker, no Eureka, no timers.
+spring:
+  datasource:
+    url: jdbc:h2:mem:scheduler_test;DB_CLOSE_DELAY=-1;MODE=MySQL
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+eureka:
+  client:
+    enabled: false
+thermogrid:
+  scheduler:
+    scheduling-enabled: false
+    listeners-enabled: false
+    single-instance-lock: false
+    resilience:
+      retry-wait-ms: 1
