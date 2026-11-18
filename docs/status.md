@@ -1,6 +1,6 @@
 # Status register
 
-Mirrors the checklist in plan section 15.9. An item is Done only when its listed test was run and passed (plan rule 10). Last updated: 2026-11-18, end of Bundle 2.2.
+Mirrors the checklist in plan section 15.9. An item is Done only when its listed test was run and passed (plan rule 10). Last updated: 2026-11-18, end of Bundle 2.3.
 
 ## Phase 0: Environment and repository setup
 
@@ -36,8 +36,12 @@ Phase 0 is not closed: the branch has not been pushed or merged, and the full-te
 | Topology reached through the gateway | Not verified | Gateway not started in this bundle; port 8080 conflict still open |
 | simulator-service core: Feign topology bootstrap with backoff, PhysicsModel, SimState, scheduled SimulationEngine, GET /api/sim/state (Bundle 2.2) | Done | 41 tests pass (11 physics, 13 engine, 11 bootstrap/mapper, 6 API/config) on in-memory H2 with a stubbed topology client; root `mvnw package` succeeds. Runtime with real Eureka + topology-service: registered as SIMULATOR-SERVICE (1 instance UP), loaded 4 zones / 16 racks, ticks advanced and temperatures changed, one simulator JVM |
 | Physics acceptance (plan 6A): 6 kW rack at 37 percent settles within 0.5 C of the formula after 200 ticks; faulted zone rises more than 0.2 C per tick | Done | Unit tests, with and without seeded noise |
-| simulator-service: RabbitMQ rack/zone readings, workload and cooling event listeners | Pending | Bundle 2.3 |
-| simulator-service: failure injection endpoints, H2 failure_injection log, control and flood endpoints | Pending | Bundle 2.3. H2 file datasource is configured but unused and not yet opened, so it gives no singleton protection yet |
+| simulator-service: H2 failure_injection table and exclusive file lock (Bundle 2.3) | Done | Tests: schema, persistence across close and reopen, a second JVM is rejected while the first holds the file. Runtime: a second simulator on the same directory exited with the clear message; failures survived a restart |
+| simulator-service: FailureRegistry, four failure types, failure and control endpoints (Bundle 2.3) | Done | Validation, expiry, clearing, history retention, RESET and each failure's effect are unit and API tested. Runtime: a cooling failure on Z2 gave FAULT, fan 0 and rising temperatures; clearing restored OK and 40 |
+| simulator-service: RabbitMQ publishing of rack and zone readings (Bundle 2.3) | Done | 16 rack + 4 zone events per tick on `thermogrid.events`, seen through a temporary queue bound to `telemetry.#` (deleted afterwards). Broker-unreachable behaviour is unit tested and was also run once against a closed port: ticks continued, one warning per cooldown |
+| simulator-service: listeners for workload.assigned, workload.removed, cooling.unit.state | Deferred | Contract mapping and a logging handler exist; no queues or consumers until Phase 4 and Phase 6 |
+| simulator-service: POST /api/sim/flood | Deferred | Load-test work (Phase 11) |
+| Phase 2 acceptance: readings on the exchange, temperatures settle, an injected failure changes the readings, re-seeding adds no duplicates | Done, with one gap | Each part was tested or observed. The "stable for 10 minutes" run was not performed |
 
 ## Phases 3 to 13
 

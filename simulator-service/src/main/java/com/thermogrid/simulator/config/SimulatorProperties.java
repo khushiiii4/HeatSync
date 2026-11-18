@@ -20,6 +20,8 @@ public record SimulatorProperties(
         @Valid @NotNull Grid grid,
         @Valid @NotNull Initial initial,
         @Valid @NotNull Physics physics,
+        @Valid @NotNull Publishing publishing,
+        @Valid @NotNull Failures failures,
         @Valid @NotNull Bootstrap bootstrap) {
 
     public record Grid(@Positive int zones, @Positive int rows, @Positive int cols) {
@@ -46,6 +48,13 @@ public record SimulatorProperties(
     }
 
     public record HealthFactors(@NotNull Double ok, @NotNull Double degraded, @NotNull Double fault) {
+    }
+
+    public record Publishing(boolean enabled, @NotNull String producer, @Min(1) int eventVersion,
+                             @Positive long retryCooldownMs) {
+    }
+
+    public record Failures(@Positive int maxDurationSec, @Positive double maxHeatSpikeKw) {
     }
 
     public record Bootstrap(@Min(1) int maxAttempts, @Positive long initialBackoffMs, @Positive long maxBackoffMs) {

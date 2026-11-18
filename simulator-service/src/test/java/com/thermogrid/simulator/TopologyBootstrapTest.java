@@ -27,6 +27,8 @@ class TopologyBootstrapTest {
         return new SimulatorProperties(2000, false, null, TestTopology.GRID, TestTopology.INITIAL,
                 new SimulatorProperties.Physics(18.0, 0.06, 0.12, 0.05, 0.05, 0.10,
                         new SimulatorProperties.HealthFactors(1.0, 0.25, 0.0)),
+                new SimulatorProperties.Publishing(false, "SIMULATOR-SERVICE", 1, 10000),
+                new SimulatorProperties.Failures(86400, 50.0),
                 new SimulatorProperties.Bootstrap(attempts, initial, max));
     }
 

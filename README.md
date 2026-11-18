@@ -88,24 +88,56 @@ java -jar topology-service/target/topology-service-0.1.0-SNAPSHOT.jar
 
 Overrides: `DB_URL`, `DB_USER`, `DB_PASSWORD`, `EUREKA_URL`. Tests use an in-memory H2 database (profile `test`) and never touch MySQL.
 
-## Simulator service (Bundle 2.2: core only)
+## Simulator service
 
-Port 8083, registers as `SIMULATOR-SERVICE`. **Singleton: run exactly one instance**, it owns the simulation clock.
+Port 8083, registers as `SIMULATOR-SERVICE`. It owns the simulation clock and publishes sensor readings to RabbitMQ.
 
-Needs Eureka (8761) and topology-service (8082, which needs MySQL) running. At startup it fetches `GET /internal/topology` directly from `TOPOLOGY-SERVICE` through Eureka (not through the gateway), retrying with exponential backoff (1 s doubling to 15 s, 12 attempts) and refusing to start if the topology never arrives or is not 4 zones / 16 racks. It uses an embedded H2 file at `./data/simdb` (relative to the working directory, git-ignored). It needs no MySQL schema and no password.
+**Needs:** Eureka (8761), topology-service (8082, which needs MySQL) and RabbitMQ (5672). The RabbitMQ login is read from the environment (it is not loaded from `.env` automatically):
 
 ```powershell
+$env:RABBITMQ_USER = '<RABBITMQ_USER from .env>'; $env:RABBITMQ_PASSWORD = '<RABBITMQ_PASSWORD from .env>'
 cd simulator-service
 java -jar target/simulator-service-0.1.0-SNAPSHOT.jar
 ```
 
+Overrides: `EUREKA_URL`, `RABBITMQ_HOST`, `RABBITMQ_USER`, `RABBITMQ_PASSWORD`, `SIM_DB_URL`. Building it alone (`mvnw -pl simulator-service test`) needs the contracts module in the local Maven repository: run `mvnw -N install` and `mvnw -pl thermogrid-contracts install -DskipTests` once, or add `-am` to the command.
+
+**Startup.** It fetches `GET /internal/topology` straight from `TOPOLOGY-SERVICE` (not through the gateway), retrying with backoff (1 s doubling to 15 s, 12 attempts), and refuses to start unless it gets 4 zones and 16 racks.
+
+**H2 database and single-instance lock.** Failures are stored in an embedded H2 file, `./data/simdb.mv.db`, relative to the working directory, so start the service from `simulator-service/`. The folder is git-ignored. The file is opened at startup and held open for the life of the process, and H2 refuses a second process on the same file. A second simulator started from the same directory therefore exits at once with "Another simulator-service process already holds the simulator database lock". This protects one host and one data directory. It is not leader election: two hosts with separate data directories, or a different `SIM_DB_URL`, would both run.
+
+Table `failure_injection` (created by `schema.sql` on every start, never dropped): `id BIGINT` auto-increment PK, `type VARCHAR(20)`, `target_id VARCHAR(8)`, `param DOUBLE NULL`, `started_at TIMESTAMP`, `ends_at TIMESTAMP NULL`, `cleared_at TIMESTAMP NULL`, `injected_by VARCHAR(50)`, index on `cleared_at`. Timestamps are UTC. A failure is active while `cleared_at` is null. Active failures are reloaded after a restart. Rows are never deleted: clearing, expiry and RESET set `cleared_at`.
+
 | Endpoint | Purpose |
 |---|---|
-| `GET /api/sim/state` | Ground truth: tick, ISO-8601 UTC timestamp, paused flag, per-rack temperature, CPU units and power, per-zone cooling output and health, `activeFailures` (always empty for now) |
+| `GET /api/sim/state` | Ground truth: tick, ISO-8601 UTC timestamp, paused flag, rack temperature, CPU, power and heat spike, zone cooling output and health, `activeFailures` |
+| `GET /api/sim/failures?active=true` | Active failures. Without `active=true`, the whole log including history |
+| `POST /api/sim/failures` | Inject a failure, 201 with the stored record |
+| `DELETE /api/sim/failures/{id}` | Clear one. 404 if unknown, 409 if already cleared |
+| `POST /api/sim/control` | `{"action":"PAUSE"}`, `RESUME` or `RESET` |
 
-Every tick (2 s) all active racks are advanced with the plan 6A formula from the previous tick's temperatures. All constants are under `thermogrid.simulator` in `application.yml`. Overrides: `EUREKA_URL`, `SIM_DB_URL`. Tests use an in-memory H2 database and a stubbed topology client, so they need no other service.
+Failure types (`durationSec` 0 or omitted means until cleared, otherwise 1 to 86400 seconds):
 
-Current limits: static load (60 units per active rack) and fixed 40 percent cooling. **Pending Bundle 2.3:** RabbitMQ readings, workload and cooling event listeners, failure injection and the failure log, the control endpoint (pause/resume/reset exist in the engine only). The H2 database is configured but nothing is written to it yet.
+```json
+{ "type": "COOLING_FAILURE",  "targetId": "Z3",  "durationSec": 0 }
+{ "type": "COOLING_DEGRADED", "targetId": "Z3",  "durationSec": 300, "param": 0.25 }
+{ "type": "SENSOR_DROPOUT",   "targetId": "R23", "durationSec": 60 }
+{ "type": "HEAT_SPIKE",       "targetId": "R23", "durationSec": 120, "param": 3.5 }
+```
+
+- `COOLING_FAILURE` (zone): health FAULT, so cooling effectiveness drops to the 0.10 floor.
+- `COOLING_DEGRADED` (zone): `param` is the remaining efficiency, greater than 0 and less than 1, used as the health factor.
+- `SENSOR_DROPOUT` (rack): no `telemetry.rack.reading` for that rack. The physics and the zone reading continue.
+- `HEAT_SPIKE` (rack): `param` is extra kW, greater than 0 and at most 50.
+- An unknown zone or rack, a missing or out-of-range `param`, or a bad duration gives 400 with the standard error body. A `param` on a type that takes none is also rejected.
+
+**Control.** `PAUSE` stops ticks. `RESUME` continues. `RESET` clears every active failure, restores the initial state at tick 0 and leaves the simulator running (not paused).
+
+**RabbitMQ.** Every tick, after the new state is committed, it publishes to the durable topic exchange `thermogrid.events` one `telemetry.rack.reading` per active rack (minus dropouts) and one `telemetry.zone.reading` per zone (20 messages with 16 active racks). Messages use the plan 8.5 envelope with producer `SIMULATOR-SERVICE`, version 1 and persistent delivery. Temperatures and power are rounded to 2 decimals. If the broker is unreachable, the tick's readings are skipped, one warning is logged, the broker is not tried again for 10 s, nothing is buffered, and the simulation keeps running.
+
+**Deferred (not in Bundle 2.3):** the simulator does not yet consume `workload.assigned`, `workload.removed` or `cooling.unit.state`: no queues and no listeners. The contract mapping exists and is tested, and its handler only logs. Applying workload load arrives with Phase 4 and cooling output with Phase 6, so load stays at 60 units per rack and cooling at 40 percent. `POST /api/sim/flood` is deferred to the load-test work. There are no roles on these endpoints until the auth phase.
+
+Tests use in-memory or temp-directory H2, a stubbed topology client and a mocked RabbitMQ template, so they need no other service.
 
 ## Repository layout
 

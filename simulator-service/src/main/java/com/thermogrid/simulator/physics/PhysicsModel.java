@@ -37,7 +37,17 @@ public final class PhysicsModel {
     }
 
     public double effectiveness(double coolingOutputPct, HealthState health) {
-        return Math.max(params.minCoolingEffectiveness(), coolingOutputPct / 100.0 * params.healthFactor(health));
+        return effectiveness(coolingOutputPct, health, null);
+    }
+
+    /** Health factor in force: the override (remaining efficiency of a COOLING_DEGRADED failure) if present. */
+    public double healthFactor(HealthState health, Double override) {
+        return override != null ? override : params.healthFactor(health);
+    }
+
+    public double effectiveness(double coolingOutputPct, HealthState health, Double healthFactorOverride) {
+        return Math.max(params.minCoolingEffectiveness(),
+                coolingOutputPct / 100.0 * healthFactor(health, healthFactorOverride));
     }
 
     /**

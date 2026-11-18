@@ -5,7 +5,9 @@ import com.thermogrid.simulator.sim.SimState;
 import com.thermogrid.simulator.topology.RackGrid;
 import com.thermogrid.simulator.topology.TopologyBootstrapper;
 import com.thermogrid.simulator.topology.TopologyClient;
+import com.thermogrid.contracts.Exchanges;
 import java.time.Clock;
+import org.springframework.amqp.core.TopicExchange;
 import java.util.Random;
 import java.util.function.DoubleSupplier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -27,6 +29,12 @@ public class SimulatorConfig {
     @Bean
     RackGrid rackGrid(TopologyClient client, SimulatorProperties props) {
         return new TopologyBootstrapper(client, props, Thread::sleep).load();
+    }
+
+    /** Durable topic exchange for all domain events. Declared on the first broker connection by RabbitAdmin. */
+    @Bean
+    TopicExchange eventsExchange() {
+        return new TopicExchange(Exchanges.EVENTS, true, false);
     }
 
     @Bean

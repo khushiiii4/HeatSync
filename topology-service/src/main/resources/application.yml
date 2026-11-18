@@ -4,6 +4,15 @@ server:
 spring:
   application:
     name: TOPOLOGY-SERVICE
+  datasource:
+    # Own schema, own user (plan section 7). The password has no default and must come from the environment.
+    url: ${DB_URL:jdbc:mysql://localhost:3306/topology_db}
+    username: ${DB_USER:topology}
+    password: ${DB_PASSWORD:${TOPOLOGY_DB_PASSWORD:}}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: update   # plan section 3: ddl-auto=update plus idempotent seeders, no Flyway
 
 eureka:
   client:

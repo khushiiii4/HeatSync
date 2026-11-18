@@ -9,4 +9,6 @@ eureka:
 thermogrid:
   simulator:
     scheduling-enabled: false
+    publishing:
+      enabled: false
     noise-seed: 1

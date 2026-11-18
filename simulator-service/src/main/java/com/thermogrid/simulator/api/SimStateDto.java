@@ -28,8 +28,4 @@ public record SimStateDto(
 
     public record ZoneDto(String id, String name, int rowIndex, double coolingOutputPct, HealthState health) {
     }
-
-    /** Provisional shape; always empty until failure injection arrives in Bundle 2.3. */
-    public record FailureDto(long id, String type, String targetId, Instant startedAt) {
-    }
 }

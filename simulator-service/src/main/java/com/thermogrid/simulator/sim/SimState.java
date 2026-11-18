@@ -23,8 +23,14 @@ public class SimState {
     public record RackState(double tempC, double cpuUnits, double powerKw, double heatSpikeKw) {
     }
 
-    /** Per-zone cooling inputs. */
-    public record ZoneState(double outputPct, HealthState health) {
+    /**
+     * Per-zone cooling inputs in force during the last tick. {@code healthFactorOverride} is the remaining efficiency
+     * of an active COOLING_DEGRADED failure, null when the configured factor of {@code health} applies.
+     */
+    public record ZoneState(double outputPct, HealthState health, Double healthFactorOverride) {
+        public ZoneState(double outputPct, HealthState health) {
+            this(outputPct, health, null);
+        }
     }
 
     public record Snapshot(long tick, Instant timestamp, Map<String, RackState> racks, Map<String, ZoneState> zones) {
@@ -55,6 +61,11 @@ public class SimState {
 
     public void replace(Snapshot next) {
         this.snapshot = next;
+    }
+
+    /** Health of a zone with no failure injected: the configured initial health (cooling events change it in Phase 6). */
+    public HealthState baseHealth() {
+        return initial.health();
     }
 
     public boolean isPaused() {
