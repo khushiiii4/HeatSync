@@ -1,0 +1,27 @@
+sequenceDiagram
+  autonumber
+  participant SIM as simulator
+  participant MQ as RabbitMQ
+  participant TEL as telemetry
+  participant SCH as scheduler
+  participant WL as workload
+  participant COOL as cooling
+  SIM->>MQ: telemetry.rack.reading every 2 s
+  MQ->>TEL: deliver reading
+  TEL->>TEL: store, update forecast for 60 s ahead
+  TEL->>MQ: thermal.alert.raised WARNING PREDICTED
+  par scheduler path
+    MQ->>SCH: alert
+    SCH->>TEL: GET /internal/telemetry/racks/latest
+    SCH->>WL: GET /internal/workloads for the hot rack
+    SCH->>SCH: choose LOW priority job and cool destination
+    SCH->>WL: PUT /internal/workloads/17/assignment
+    WL->>MQ: workload.assigned R23 to R41
+  and cooling path
+    MQ->>COOL: alert
+    COOL->>MQ: cooling.unit.state Z2 output 100 percent
+  end
+  MQ->>SIM: workload.assigned and cooling.unit.state
+  SIM->>SIM: heat moves, cooling effect changes
+  SIM->>MQ: telemetry.rack.reading R23 temperature falling
+  TEL->>MQ: thermal.alert.cleared

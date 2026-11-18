@@ -1,0 +1,20 @@
+sequenceDiagram
+  autonumber
+  actor Op as Operator
+  participant SIM as simulator
+  participant COOL as cooling-controller
+  participant SCH as scheduler
+  participant WL as workload
+  participant TEL as telemetry
+  Op->>SIM: POST /api/sim/failures COOLING_FAILURE Z3
+  SIM->>COOL: telemetry.zone.reading unitHealth FAULT
+  COOL->>COOL: debounce 2 readings, mark FAULT
+  COOL->>SCH: cooling.unit.state Z3 health FAULT
+  COOL->>SIM: cooling.unit.state healthy zones floor 60 percent
+  SCH->>SCH: mark Z3 unavailable and plan a drain
+  loop each cycle until Z3 is drained
+    SCH->>WL: PUT assignment with LOW priority first
+    WL->>SIM: workload.assigned
+  end
+  SIM->>TEL: Z3 heat falls and temperature plateaus
+  TEL->>TEL: alerts lowered or cleared

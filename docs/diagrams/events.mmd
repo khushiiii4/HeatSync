@@ -1,0 +1,15 @@
+flowchart LR
+  SIM[simulator]
+  TEL[telemetry]
+  WL[workload]
+  SCH[scheduler]
+  COOL[cooling-controller]
+  SIM -->|telemetry.rack.reading| TEL
+  SIM -->|telemetry.zone.reading| TEL
+  SIM -->|telemetry.zone.reading| COOL
+  TEL -->|thermal.alert.raised, lowered, cleared| SCH
+  TEL -->|thermal.alert.raised, lowered, cleared| COOL
+  WL -->|workload.submitted| SCH
+  WL -->|workload.assigned, removed| SIM
+  COOL -->|cooling.unit.state| SIM
+  COOL -->|cooling.unit.state| SCH

@@ -1,0 +1,20 @@
+sequenceDiagram
+  autonumber
+  actor Op as Operator
+  participant GW as api-gateway
+  participant WL as workload-service
+  participant SCH as scheduler-service
+  participant TOPO as topology-service
+  participant TEL as telemetry-service
+  participant SIM as simulator-service
+  Op->>GW: POST /api/workloads with JWT
+  GW->>WL: forward with X-User headers
+  WL->>WL: save as PENDING
+  WL-->>Op: 201 Created
+  WL->>SCH: workload.submitted
+  SCH->>TOPO: GET /internal/topology cached
+  SCH->>TEL: GET /internal/telemetry/racks/latest
+  SCH->>SCH: score candidates and save the decision
+  SCH->>WL: PUT /internal/workloads/id/assignment
+  WL->>SIM: workload.assigned
+  SIM->>SIM: add heat source to the rack
