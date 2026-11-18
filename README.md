@@ -139,6 +139,38 @@ Failure types (`durationSec` 0 or omitted means until cleared, otherwise 1 to 86
 
 Tests use in-memory or temp-directory H2, a stubbed topology client and a mocked RabbitMQ template, so they need no other service.
 
+## Telemetry service
+
+Port 8084, registers as `TELEMETRY-SERVICE`, owns `telemetry_db`. It consumes the simulator's rack and zone readings, stores them, forecasts each rack 60 s ahead, classifies risk, raises and clears alerts, and marks silent sensors STALE.
+
+**Needs:** MySQL (schema `telemetry_db`), RabbitMQ and Eureka. Start it before the simulator, so the queues exist before readings are published. The passwords are read from the environment (not from `.env` automatically):
+
+```powershell
+$env:DB_PASSWORD = '<TELEMETRY_DB_PASSWORD from .env>'
+$env:RABBITMQ_USER = '<RABBITMQ_USER from .env>'; $env:RABBITMQ_PASSWORD = '<RABBITMQ_PASSWORD from .env>'
+java -jar telemetry-service/target/telemetry-service-0.1.0-SNAPSHOT.jar
+```
+
+Overrides: `DB_URL`, `DB_USER`, `DB_PASSWORD`, `RABBITMQ_HOST`, `RABBITMQ_USER`, `RABBITMQ_PASSWORD`, `EUREKA_URL`. Tests use in-memory H2 and a mocked RabbitMQ template, so they touch no real database or broker.
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/telemetry/racks/latest` | Latest state per rack: temperature, 60 s forecast, trend per minute, risk level, sensor status, power, CPU load. Racks that never reported are absent |
+| `GET /api/telemetry/racks/{rackId}/history?minutes=10` | Readings of the last 1 to 360 minutes with the forecast series (replayed through the same forecast engine) |
+| `GET /api/telemetry/zones/latest` | Newest reading per zone |
+| `GET /api/alerts?state=ACTIVE&limit=50` | Alerts, newest first. `state` is ACTIVE, CLEARED or ALL; `limit` 1 to 500 |
+| `GET /internal/telemetry/racks/latest` | The rack view for the scheduler, plus `lastReadingAt`. Not routed by the gateway; the token check arrives with auth |
+
+**RabbitMQ.** It declares `thermogrid.events` (topic, durable), the dead-letter exchange `thermogrid.dlx` and queue `thermogrid.dlq` (bound with `#`), and two durable queues: `q.telemetry.rack-readings` (key `telemetry.rack.reading`, max 50,000) and `q.telemetry.zone-readings` (key `telemetry.zone.reading`, max 20,000). Both have no TTL, drop the oldest when full and dead-letter to `thermogrid.dlx`. A failing message is tried 3 times (1 s, 2 s, 4 s backoff) and then rejected without requeue, so it lands in `thermogrid.dlq`. Malformed or impossible messages (bad JSON, NaN, out-of-range values) skip the retries and go to the DLQ at once. A message is acknowledged only after its database transaction committed. Messages dropped because a queue is full are also dead-lettered by RabbitMQ.
+
+**Readings and forecast.** Duplicates `(rackId, time)` and `(zoneId, time)` are ignored. A reading older than the newest applied one is stored but never changes the forecast state. Each rack is updated under a row lock. Forecast: damped Holt, `a=0.4, b=0.15, phi=0.95`, 30 ticks ahead. Risk uses `max(temperature, forecast)`: WATCH from 30, WARNING from 34, CRITICAL from 38; going down needs 5 consecutive readings at least 2 C below the current level's threshold. Details and evidence are in [docs/calibration.md](docs/calibration.md).
+
+**Alerts.** At most one ACTIVE alert per rack. `thermal.alert.raised` when the level rises (also when an active alert rises again), `thermal.alert.lowered` when it falls but stays above NORMAL, `thermal.alert.cleared` on return to NORMAL. Basis is PREDICTED when the observed temperature alone would not justify the level. Events are published after the database commit. Limitation: if RabbitMQ is down for all 3 publish attempts, that event is lost (logged at ERROR) while the alert stays correct in the database and API. There is no outbox yet.
+
+**Stale sensors.** A rack with no accepted reading for 10 s becomes `STALE` (checked every 2 s). Its forecast and risk stay frozen, active alerts stay active, and nothing is invented. The next newer valid reading restores `OK`.
+
+**Retention** (every 10 minutes, batches of 5,000, at most 20 batches per run): rack and zone readings 6 hours, CLEARED alerts 7 days. ACTIVE alerts and `rack_forecast_state` are never deleted.
+
 ## Repository layout
 
 ```
