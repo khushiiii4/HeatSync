@@ -6,11 +6,11 @@ ThermoGrid is a software-simulated data center (4 cooling zones, 16 racks) built
 
 ## Current status
 
-Phases 0 to 7 are implemented: infrastructure, contracts, Eureka and the API gateway, topology, the simulator, telemetry with forecasting and alerts, the workload service, the scheduler (thermal-aware placement, migration, reconcile and HOLD mode) and the cooling controller (proportional control, fault detection, fail-safe, modelled energy). Phase 7 hardened RabbitMQ (queue policies, retry and dead-lettering, publisher confirms, idempotency, startup script). Not built yet: frontend, authentication, deployment. Start everything in the right order with `scripts/start-all.sh` (consumers before producers). See [docs/status.md](docs/status.md) for evidence per item and [docs/decision-log.md](docs/decision-log.md) for decisions.
+Phases 0 to 8 are implemented (Phase 8 is the React dashboard in `frontend/`, see "Frontend dashboard"): infrastructure, contracts, Eureka and the API gateway, topology, the simulator, telemetry with forecasting and alerts, the workload service, the scheduler (thermal-aware placement, migration, reconcile and HOLD mode) and the cooling controller (proportional control, fault detection, fail-safe, modelled energy). Phase 7 hardened RabbitMQ (queue policies, retry and dead-lettering, publisher confirms, idempotency, startup script). Not built yet: frontend, authentication, deployment. Start everything in the right order with `scripts/start-all.sh` (consumers before producers). See [docs/status.md](docs/status.md) for evidence per item and [docs/decision-log.md](docs/decision-log.md) for decisions.
 
 ## Modules
 
-`thermogrid-contracts`, `eureka-server`, `api-gateway`, `auth-service`, `topology-service`, `simulator-service`, `telemetry-service`, `workload-service`, `scheduler-service`, `cooling-controller-service`. The React `frontend/` is not a Maven module and is not created yet.
+`thermogrid-contracts`, `eureka-server`, `api-gateway`, `auth-service`, `topology-service`, `simulator-service`, `telemetry-service`, `workload-service`, `scheduler-service`, `cooling-controller-service`. The React `frontend/` is not a Maven module (Node project, see "Frontend dashboard").
 
 ## Prerequisites
 
@@ -172,6 +172,35 @@ Overrides: `DB_URL`, `DB_USER`, `DB_PASSWORD`, `RABBITMQ_HOST`, `RABBITMQ_USER`,
 **Stale sensors.** A rack with no accepted reading for 10 s becomes `STALE` (checked every 2 s). Its forecast and risk stay frozen, active alerts stay active, and nothing is invented. The next newer valid reading restores `OK`.
 
 **Retention** (every 10 minutes, batches of 5,000, at most 20 batches per run): rack and zone readings 6 hours, CLEARED alerts 7 days. ACTIVE alerts and `rack_forecast_state` are never deleted.
+
+## Frontend dashboard (Phase 8)
+
+React 18, Vite, Tailwind CSS 4, Recharts, TanStack Query, React Router and Axios, in `frontend/` (not a Maven module). The browser talks only to the API gateway.
+
+```
+scripts/start-all.sh                 # backend (set GATEWAY_PORT=18080 if 8080 is taken)
+cd frontend && npm install
+GATEWAY_PORT=18080 npm run dev       # http://localhost:5173, /api is proxied to the gateway
+npm test                             # unit and component tests (vitest)
+npm run build                        # production bundle in frontend/dist
+GATEWAY_PORT=18080 npm run preview   # serve the production bundle on :4173
+```
+
+`GATEWAY_PORT` (default 8080) is the same variable the backend uses; the Vite dev and preview servers read it to proxy `/api`. `VITE_API_BASE` points the app at a gateway URL directly (the gateway then has to allow the page origin, default `http://localhost:5173`).
+
+| Route | Page | Role |
+|-------|------|------|
+| `/login` | Sign in, or start a demo session (security is off until Phase 9) | public |
+| `/` | Overview: KPI strip, service health strip, rack heat map, active alerts, decision feed, cooling zone cards, workload distribution | VIEWER+ |
+| `/racks/:rackId` | Rack detail: temperature and forecast chart (10 min), power and CPU chart, workloads on the rack, alerts for the rack | VIEWER+ |
+| `/workloads` | Table with filters, submit form, remove, CPU by rack stacked by priority, pending queue, capacity banner | VIEWER+ (submit and remove: OPERATOR) |
+| `/cooling` | Output per zone over time, modelled power against the static baseline, action log, manual override | VIEWER+ (override: OPERATOR) |
+| `/events` | Alerts, migrations and cooling actions merged into one timeline | VIEWER+ |
+| `/control` | Failure injection with confirmation, scenario presets, autopilot switch, active failures with Clear, simulation and demo controls (ADMIN) | OPERATOR+ |
+
+How it behaves when services fail: every data source is a separate polled query (2 to 5 s, per plan 9.4) inside its own panel and error boundary. When a service stops, only the panels fed by it show a stale badge ("Scheduler unavailable, last update 12:41:05", time from the server) and keep their last data; everything else keeps updating, and the service health strip shows healthy, degraded, unavailable or stale per service. Polling pauses while the tab is hidden. The checklist is automated by `frontend/scripts/stale-check.sh <service-name>`; `frontend/scripts/screenshots.mjs` captures every page at three resolutions and flags overflow and console errors; `frontend/scripts/scenario.mjs degrade|fail` drives a plan scenario through the Control Room UI. Screenshots are in `docs/screenshots/`.
+
+Phase 8 limits: no authentication enforcement (Phase 9), polling only (no SSE), no Docker or nginx packaging yet (Phase 12).
 
 ## Messaging reliability (Phase 7)
 

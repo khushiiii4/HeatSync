@@ -1,0 +1,91 @@
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/jetbrains-mono';
+@import 'tailwindcss';
+
+/* ThermoGrid design tokens: a deep navy control-room palette with layered surfaces. */
+@theme {
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+
+  --color-ink-950: #070b14;
+  --color-ink-900: #0a101c;
+  --color-ink-850: #0d1523;
+  --color-ink-800: #111a2c;
+  --color-ink-700: #17223a;
+  --color-ink-600: #1f2d4a;
+  --color-ink-500: #2b3b5e;
+
+  --color-fg: #e8eefb;
+  --color-fg-soft: #b4c0d8;
+  --color-fg-mute: #8493b2;
+  --color-fg-faint: #5d6b88;
+
+  --color-cyan: #22d3ee;
+  --color-sky: #38bdf8;
+  --color-azure: #3b82f6;
+  --color-teal: #2dd4bf;
+  --color-ok: #34d399;
+  --color-warn: #fbbf24;
+  --color-orange: #fb923c;
+  --color-crit: #f87171;
+}
+
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  background: var(--color-ink-950);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: 'cv11', 'ss01';
+}
+.num { font-variant-numeric: tabular-nums; font-feature-settings: 'tnum'; }
+
+/* A restrained ambient wash behind the workspace. */
+.app-bg {
+  background:
+    radial-gradient(1200px 520px at 80% -10%, rgb(34 211 238 / 0.06), transparent 60%),
+    radial-gradient(900px 480px at -10% 10%, rgb(59 130 246 / 0.06), transparent 60%),
+    var(--color-ink-950);
+}
+
+.card-surface {
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.025), rgb(255 255 255 / 0) 40%), var(--color-ink-850);
+  border: 1px solid var(--color-ink-600);
+  border-radius: 14px;
+  box-shadow: 0 1px 0 0 rgb(255 255 255 / 0.03) inset, 0 14px 32px -18px rgb(0 0 0 / 0.7);
+}
+
+:focus-visible { outline: 2px solid var(--color-cyan); outline-offset: 2px; border-radius: 6px; }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--color-ink-600); border-radius: 8px; border: 2px solid var(--color-ink-900); }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* Maintenance racks are hatched, stale racks are grey. */
+.hatch {
+  background-image: repeating-linear-gradient(135deg, rgb(255 255 255 / 0.12) 0 6px, transparent 6px 12px);
+}
+
+@keyframes tg-flash {
+  0%   { box-shadow: 0 0 0 0 rgb(34 211 238 / 0.9); }
+  100% { box-shadow: 0 0 0 14px rgb(34 211 238 / 0); }
+}
+.flash { animation: tg-flash 1s ease-out 2; }
+
+@keyframes tg-shimmer { 100% { transform: translateX(100%); } }
+.skeleton { position: relative; overflow: hidden; background: var(--color-ink-700); border-radius: 8px; }
+.skeleton::after {
+  content: ''; position: absolute; inset: 0; transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.06), transparent);
+  animation: tg-shimmer 1.4s infinite;
+}
+@keyframes tg-pulse { 0%,100% { opacity: 1 } 50% { opacity: .35 } }
+.live-dot { animation: tg-pulse 2s ease-in-out infinite; }
+@keyframes tg-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.rise { animation: tg-rise .18s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .flash, .skeleton::after, .live-dot, .rise { animation: none; }
+}
