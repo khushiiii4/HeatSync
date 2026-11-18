@@ -61,6 +61,18 @@ Build first (`mvnw -DskipTests package`), then from the repository root:
 ```n
 Or during development: `.\mvnw.cmd -pl eureka-server spring-boot:run`. Dashboard: http://localhost:8761. Dev timers apply (3 s renewal, 9 s expiry, 3 s eviction, self-preservation off): every client service must set `eureka.instance.lease-renewal-interval-in-seconds: 3` and `lease-expiration-duration-in-seconds: 9`.
 
+## API gateway
+
+Spring Cloud Gateway 4.3.5 (WebFlux), port 8080, the only public entry point. Start Eureka first, then:
+
+```n java -jar api-gateway/target/api-gateway-0.1.0-SNAPSHOT.jar
+```n
+Routes (`/api/auth`, `/api/topology`, `/api/sim`, `/api/telemetry`, `/api/alerts`, `/api/workloads`, `/api/scheduler`, `/api/cooling`) go to `lb://` services through Eureka. `/internal/**` is not routed. `GET /api/platform/services` is served by the gateway. CORS allows `http://localhost:5173` (override with `thermogrid.cors.allowed-origins`). Security is off (`thermogrid.security.enabled=false`) until phase 9.
+
+If port 8080 is taken (on this machine `AgentService.exe` holds it), find the owner with `Get-NetTCPConnection -LocalPort 8080 -State Listen`; for a temporary run use `--server.port=18080` rather than editing the config.
+
+Temporary demo endpoint: `topology-service` (port 8082) exposes `GET /api/topology/ping`, to be removed in phase 2.
+
 ## Repository layout
 
 ```

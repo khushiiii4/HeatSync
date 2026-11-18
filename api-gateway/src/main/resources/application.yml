@@ -1,0 +1,116 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: API-GATEWAY
+  cloud:
+    loadbalancer:
+      # The default (non-Caffeine) cache never expires entries, so a stopped service would stay
+      # routable. Read straight from the Eureka client registry instead (refreshed every 3 s below).
+      cache:
+        enabled: false
+    gateway:
+      server:
+        webflux:   # property prefix for Spring Cloud Gateway 4.3.x (Spring Cloud 2025.0.x)
+          httpclient:
+            response-timeout: 5s
+          default-filters:
+            # Defensive: downstream services must not send CORS headers (CORS lives only here).
+            - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials, RETAIN_FIRST
+          # Explicit routes only. No discovery locator, so nothing is exposed automatically,
+          # and /internal/** is deliberately not routed (plan sections 4 and 5.4).
+          routes:
+          - id: auth-route
+            uri: lb://AUTH-SERVICE
+            predicates:
+              - Path=/api/auth/**
+            filters:
+              - name: CircuitBreaker
+                args:
+                  name: AUTH-SERVICE
+                  fallbackUri: forward:/fallback/AUTH-SERVICE
+          - id: topology-route
+            uri: lb://TOPOLOGY-SERVICE
+            predicates:
+              - Path=/api/topology/**
+            filters:
+              - name: CircuitBreaker
+                args:
+                  name: TOPOLOGY-SERVICE
+                  fallbackUri: forward:/fallback/TOPOLOGY-SERVICE
+          - id: sim-route
+            uri: lb://SIMULATOR-SERVICE
+            predicates:
+              - Path=/api/sim/**
+            filters:
+              - name: CircuitBreaker
+                args:
+                  name: SIMULATOR-SERVICE
+                  fallbackUri: forward:/fallback/SIMULATOR-SERVICE
+          - id: telemetry-route
+            uri: lb://TELEMETRY-SERVICE
+            predicates:
+              - Path=/api/telemetry/**
+            filters:
+              - name: CircuitBreaker
+                args:
+                  name: TELEMETRY-SERVICE
+                  fallbackUri: forward:/fallback/TELEMETRY-SERVICE
+          - id: alerts-route
+            uri: lb://TELEMETRY-SERVICE
+            predicates:
+              - Path=/api/alerts/**
+            filters:
+              - name: CircuitBreaker
+                args:
+                  name: TELEMETRY-SERVICE
+                  fallbackUri: forward:/fallback/TELEMETRY-SERVICE
+          - id: workloads-route
+            uri: lb://WORKLOAD-SERVICE
+            predicates:
+              - Path=/api/workloads/**
+            filters:
+              - name: CircuitBreaker
+                args:
+                  name: WORKLOAD-SERVICE
+                  fallbackUri: forward:/fallback/WORKLOAD-SERVICE
+          - id: scheduler-route
+            uri: lb://SCHEDULER-SERVICE
+            predicates:
+              - Path=/api/scheduler/**
+            filters:
+              - name: CircuitBreaker
+                args:
+                  name: SCHEDULER-SERVICE
+                  fallbackUri: forward:/fallback/SCHEDULER-SERVICE
+          - id: cooling-route
+            uri: lb://COOLING-CONTROLLER-SERVICE
+            predicates:
+              - Path=/api/cooling/**
+            filters:
+              - name: CircuitBreaker
+                args:
+                  name: COOLING-CONTROLLER-SERVICE
+                  fallbackUri: forward:/fallback/COOLING-CONTROLLER-SERVICE
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+    register-with-eureka: true
+    fetch-registry: true
+    registry-fetch-interval-seconds: 3
+  instance:
+    prefer-ip-address: true
+    instance-id: ${spring.application.name}:${random.value}
+    # Dev lease timers, consistent with eureka-server (plan section 4).
+    lease-renewal-interval-in-seconds: 3
+    lease-expiration-duration-in-seconds: 9
+
+thermogrid:
+  security:
+    # Phase 9 switches this on. No JWT filter, role rules or token checks exist yet.
+    enabled: false
+  cors:
+    allowed-origins: http://localhost:5173
