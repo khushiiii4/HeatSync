@@ -71,7 +71,41 @@ Routes (`/api/auth`, `/api/topology`, `/api/sim`, `/api/telemetry`, `/api/alerts
 
 If port 8080 is taken (on this machine `AgentService.exe` holds it), find the owner with `Get-NetTCPConnection -LocalPort 8080 -State Listen`; for a temporary run use `--server.port=18080` rather than editing the config.
 
-Temporary demo endpoint: `topology-service` (port 8082) exposes `GET /api/topology/ping`, to be removed in phase 2.
+## Topology service
+
+Port 8082, registers as `TOPOLOGY-SERVICE`, owns `topology_db` (zones and racks, seeded idempotently on startup: 4 zones, 16 racks). Needs MySQL and Eureka running. The password is read from the environment (it is not loaded from `.env` automatically):
+
+```powershell
+$env:DB_PASSWORD = '<value of TOPOLOGY_DB_PASSWORD from .env>'
+java -jar topology-service/target/topology-service-0.1.0-SNAPSHOT.jar
+```
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/topology` | Array of zones, each with its racks (public, via the gateway) |
+| `GET /api/topology/racks/{rackId}` | One rack, or 404 with the standard error body |
+| `GET /internal/topology` | Same payload as `/api/topology`, for service-to-service calls. Never routed by the gateway |
+
+Overrides: `DB_URL`, `DB_USER`, `DB_PASSWORD`, `EUREKA_URL`. Tests use an in-memory H2 database (profile `test`) and never touch MySQL.
+
+## Simulator service (Bundle 2.2: core only)
+
+Port 8083, registers as `SIMULATOR-SERVICE`. **Singleton: run exactly one instance**, it owns the simulation clock.
+
+Needs Eureka (8761) and topology-service (8082, which needs MySQL) running. At startup it fetches `GET /internal/topology` directly from `TOPOLOGY-SERVICE` through Eureka (not through the gateway), retrying with exponential backoff (1 s doubling to 15 s, 12 attempts) and refusing to start if the topology never arrives or is not 4 zones / 16 racks. It uses an embedded H2 file at `./data/simdb` (relative to the working directory, git-ignored). It needs no MySQL schema and no password.
+
+```powershell
+cd simulator-service
+java -jar target/simulator-service-0.1.0-SNAPSHOT.jar
+```
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/sim/state` | Ground truth: tick, ISO-8601 UTC timestamp, paused flag, per-rack temperature, CPU units and power, per-zone cooling output and health, `activeFailures` (always empty for now) |
+
+Every tick (2 s) all active racks are advanced with the plan 6A formula from the previous tick's temperatures. All constants are under `thermogrid.simulator` in `application.yml`. Overrides: `EUREKA_URL`, `SIM_DB_URL`. Tests use an in-memory H2 database and a stubbed topology client, so they need no other service.
+
+Current limits: static load (60 units per active rack) and fixed 40 percent cooling. **Pending Bundle 2.3:** RabbitMQ readings, workload and cooling event listeners, failure injection and the failure log, the control endpoint (pause/resume/reset exist in the engine only). The H2 database is configured but nothing is written to it yet.
 
 ## Repository layout
 

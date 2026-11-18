@@ -1,0 +1,65 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: SIMULATOR-SERVICE
+  # Embedded H2 file database. Nothing uses it until Bundle 2.3 (failure_injection log), but the
+  # file lock also stops a second simulator process on the same working directory.
+  datasource:
+    url: ${SIM_DB_URL:jdbc:h2:file:./data/simdb}
+    username: sa
+    password: ""
+  cloud:
+    openfeign:
+      client:
+        config:
+          default:
+            connect-timeout: 2000
+            read-timeout: 5000
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+    registry-fetch-interval-seconds: 3
+  instance:
+    prefer-ip-address: true
+    instance-id: ${spring.application.name}:${random.value}
+    lease-renewal-interval-in-seconds: 3
+    lease-expiration-duration-in-seconds: 9
+
+# Every tunable value of the simulation lives here (plan section 6A).
+thermogrid:
+  simulator:
+    tick-ms: 2000
+    scheduling-enabled: true
+    # Blank = unseeded Gaussian noise. Set a number for a reproducible run.
+    noise-seed:
+    grid:
+      zones: 4
+      rows: 4
+      cols: 4
+    initial:
+      # Not specified by the plan. 26.0 is the zone target temperature and sits close to the
+      # settling point of a 60-unit rack at 40 percent cooling (about 26.5 C), so the first minutes
+      # are calm. See docs/decision-log.md D-018.
+      temp-c: 26.0
+      cooling-output-pct: 40
+      cpu-units: 60
+      health: OK
+    physics:
+      supply-temp-c: 18.0
+      alpha: 0.06
+      beta: 0.12
+      gamma: 0.05
+      noise-sigma-c: 0.05
+      min-cooling-effectiveness: 0.10
+      health-factors:
+        ok: 1.0
+        degraded: 0.25
+        fault: 0.0
+    bootstrap:
+      max-attempts: 12
+      initial-backoff-ms: 1000
+      max-backoff-ms: 15000

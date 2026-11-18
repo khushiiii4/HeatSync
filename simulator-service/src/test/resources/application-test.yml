@@ -1,0 +1,12 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:sim_test;DB_CLOSE_DELAY=-1
+
+eureka:
+  client:
+    enabled: false
+
+thermogrid:
+  simulator:
+    scheduling-enabled: false
+    noise-seed: 1
