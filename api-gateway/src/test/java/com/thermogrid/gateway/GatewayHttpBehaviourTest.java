@@ -22,7 +22,8 @@ import reactor.core.publisher.Flux;
 /** A test-only route points at a closed port to exercise the circuit-breaker fallback. */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
         "eureka.client.enabled=false",
-        "spring.cloud.discovery.enabled=false"
+        "spring.cloud.discovery.enabled=false",
+        "thermogrid.security.enabled=false"
 })
 class GatewayHttpBehaviourTest {
 

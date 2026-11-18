@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Starts ThermoGrid for local development in the order required by plan section 13 (consumers before producers).
 #
-#   1. MySQL and RabbitMQ (Docker)        5. workload-service
-#   2. eureka-server                      6. scheduler-service
-#   3. topology-service                   7. cooling-controller-service
-#   4. telemetry-service                  8. simulator-service   9. api-gateway
+#   1. MySQL and RabbitMQ (Docker)        6. workload-service
+#   2. eureka-server                      7. scheduler-service
+#   3. auth-service                       8. cooling-controller-service
+#   4. topology-service                   9. simulator-service   10. api-gateway
+#   5. telemetry-service
 #
 # Why this order matters: a message published before its queue exists is lost (RabbitMQ drops it when no queue is
 # bound), and every consumer declares and owns its queues. The simulator is the heaviest producer and needs topology
@@ -35,6 +36,7 @@ EUREKA_URL_BASE="${EUREKA_BASE:-http://localhost:8761}"
 # name | module | port | eureka application name ("-" = not registered)
 SERVICES=(
   "eureka-server|eureka-server|8761|-"
+  "auth-service|auth-service|8081|AUTH-SERVICE"
   "topology-service|topology-service|8082|TOPOLOGY-SERVICE"
   "telemetry-service|telemetry-service|8084|TELEMETRY-SERVICE"
   "workload-service|workload-service|8085|WORKLOAD-SERVICE"
@@ -97,7 +99,7 @@ eureka_up() {   # eureka_up APP
 
 start_infra() {
   if [ "$START_INFRA" != "1" ]; then say "START_INFRA=0: assuming MySQL and RabbitMQ are running"; return; fi
-  say "1/9 infrastructure: MySQL and RabbitMQ"
+  say "1/10 infrastructure: MySQL and RabbitMQ"
   if [ "$DRY_RUN" = "1" ]; then
     say "(dry run) docker compose --env-file .env -f infra/docker-compose.yml up -d ; wait healthy: thermogrid-mysql thermogrid-rabbitmq"
     return
@@ -111,7 +113,7 @@ start_infra() {
 start_service() {   # start_service INDEX NAME MODULE PORT EUREKA_APP
   local idx="$1" name="$2" module="$3" port="$4" app="$5"
   local pidfile="$RUN_DIR/$name.pid" log="$LOG_DIR/$name.log"
-  say "$idx/9 $name (port $port)"
+  say "$idx/10 $name (port $port)"
   if [ "$DRY_RUN" = "1" ]; then
     say "(dry run) start $name in $module/ ; wait for port $port$([ "$app" != "-" ] && printf ' and Eureka status UP for %s' "$app")"
     return

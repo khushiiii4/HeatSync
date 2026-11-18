@@ -25,3 +25,9 @@ eureka:
     # Dev lease timers, consistent with eureka-server (plan section 4).
     lease-renewal-interval-in-seconds: 3
     lease-expiration-duration-in-seconds: 9
+
+thermogrid:
+  # Phase 9: /internal/** requires X-Internal-Token and Feign sends it. Never blank while security is enabled.
+  internal-token: ${THERMOGRID_INTERNAL_TOKEN:}
+  security:
+    enabled: ${THERMOGRID_SECURITY_ENABLED:true}

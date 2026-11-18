@@ -17,7 +17,7 @@ import org.springframework.mock.web.server.MockServerWebExchange;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import reactor.core.publisher.Mono;
 
-@SpringBootTest(properties = {"eureka.client.enabled=false", "spring.cloud.discovery.enabled=false"})
+@SpringBootTest(properties = {"eureka.client.enabled=false", "spring.cloud.discovery.enabled=false", "thermogrid.security.enabled=false"})
 class GatewayApplicationTest {
 
     @Autowired
@@ -30,7 +30,7 @@ class GatewayApplicationTest {
     ReactiveDiscoveryClient discovery;
 
     @Test
-    void contextLoadsAndSecurityIsOffInThisPhase() {
+    void contextLoadsAndTheTestSwitchesSecurityOff() {
         assertThat(context.containsBean("corsWebFilter")).isTrue();
         assertThat(security.enabled()).isFalse();
     }

@@ -3,6 +3,7 @@
 //   degrade = plan scenarios 2 to 5 (Z2 cooling degraded, then cleared)
 //   fail    = plan scenario 6 (cooling unit in Z3 fails, then cleared)
 import puppeteer from 'puppeteer-core';
+import { signIn } from './_login.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -17,7 +18,7 @@ const browser = await puppeteer.launch({ executablePath: CHROME, headless: true,
 const page = await browser.newPage();
 await page.setViewport({ width: 1440, height: 900 });
 await page.goto(`${BASE}/login`, { waitUntil: 'domcontentloaded' });
-await page.evaluate(() => localStorage.setItem('thermogrid.auth', JSON.stringify({ token: null, user: { username: 'demo-admin', role: 'ADMIN' }, stub: true })));
+await signIn(page, BASE);
 
 async function clickText(selector, text) {
   const ok = await page.evaluate((sel, t) => {

@@ -5,7 +5,7 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 out="$(DRY_RUN=1 "$ROOT/scripts/start-all.sh" 2>&1)" || { echo "FAIL: dry run exited non-zero"; echo "$out"; exit 1; }
 
-expected=(infrastructure eureka-server topology-service telemetry-service workload-service scheduler-service cooling-controller-service simulator-service api-gateway)
+expected=(infrastructure eureka-server auth-service topology-service telemetry-service workload-service scheduler-service cooling-controller-service simulator-service api-gateway)
 prev=-1; fail=0
 for item in "${expected[@]}"; do
   line="$(printf '%s\n' "$out" | grep -n -E "^\[start-all\] [0-9]+/9 .*${item}" | head -1 | cut -d: -f1)"

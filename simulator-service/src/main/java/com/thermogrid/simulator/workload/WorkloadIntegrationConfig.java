@@ -1,10 +1,8 @@
 package com.thermogrid.simulator.workload;
 
 import com.thermogrid.contracts.Exchanges;
-import com.thermogrid.contracts.Headers;
 import com.thermogrid.contracts.RoutingKeys;
 import com.thermogrid.simulator.events.SimulatorEventDispatcher;
-import feign.RequestInterceptor;
 import java.time.Clock;
 import java.util.Map;
 import org.springframework.amqp.core.Binding;
@@ -50,17 +48,6 @@ public class WorkloadIntegrationConfig {
     @Bean
     CoolingInputs coolingInputs() {
         return new CoolingInputs();
-    }
-
-    /** Sends the shared internal token on every Feign call when one is configured. */
-    @Bean
-    RequestInterceptor internalTokenInterceptor(WorkloadSyncProperties props) {
-        return template -> {
-            String token = props.internalToken();
-            if (token != null && !token.isBlank()) {
-                template.header(Headers.INTERNAL_TOKEN, token);
-            }
-        };
     }
 
     /**

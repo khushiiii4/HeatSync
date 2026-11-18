@@ -41,10 +41,12 @@ eureka:
     lease-expiration-duration-in-seconds: 9
 
 thermogrid:
+  # Phase 9: /internal/** requires X-Internal-Token and Feign sends it. Never blank while security is enabled.
+  internal-token: ${THERMOGRID_INTERNAL_TOKEN:}
+  security:
+    enabled: ${THERMOGRID_SECURITY_ENABLED:true}
   workload:
     scheduling-enabled: true
-    # Shared secret for /internal/**. Blank disables the check (local development); the gateway never routes /internal.
-    internal-token: ${THERMOGRID_INTERNAL_TOKEN:}
     producer: WORKLOAD-SERVICE
     event-version: 1
     max-bulk: 500

@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
@@ -17,6 +17,10 @@
     <description>Reading ingestion, damped Holt forecast, risk classification, alerts and stale detection</description>
 
     <dependencies>
+        <dependency>
+            <groupId>com.thermogrid</groupId>
+            <artifactId>thermogrid-internal-security</artifactId>
+        </dependency>
         <dependency>
             <groupId>com.thermogrid</groupId>
             <artifactId>thermogrid-contracts</artifactId>

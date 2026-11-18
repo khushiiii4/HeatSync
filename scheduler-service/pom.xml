@@ -24,6 +24,10 @@
     <dependencies>
         <dependency>
             <groupId>com.thermogrid</groupId>
+            <artifactId>thermogrid-internal-security</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.thermogrid</groupId>
             <artifactId>thermogrid-contracts</artifactId>
         </dependency>
         <dependency>

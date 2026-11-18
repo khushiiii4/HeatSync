@@ -1,0 +1,47 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: AUTH-SERVICE
+  datasource:
+    # Own schema, own user (plan section 7). The password has no default and must come from the environment.
+    url: ${DB_URL:jdbc:mysql://localhost:3306/auth_db}
+    username: ${DB_USER:auth}
+    password: ${DB_PASSWORD:${AUTH_DB_PASSWORD:}}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: update   # plan section 3: ddl-auto=update plus idempotent seeders, no Flyway
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+    registry-fetch-interval-seconds: 3
+  instance:
+    prefer-ip-address: true
+    instance-id: ${spring.application.name}:${random.value}
+    lease-renewal-interval-in-seconds: 3
+    lease-expiration-duration-in-seconds: 9
+
+thermogrid:
+  auth:
+    # HS256 signing secret, at least 32 characters. No default: the service refuses to start without it.
+    jwt-secret: ${THERMOGRID_JWT_SECRET:}
+    token-ttl-seconds: 28800          # 8 hours (plan section 8.1)
+    # Demo users. Passwords come only from the environment (.env); an entry with no password is skipped.
+    # Give either a plain password (hashed with BCrypt at startup) or a ready-made BCrypt hash (the hash wins).
+    seed-users:
+      - username: ${SEED_VIEWER_USERNAME:viewer}
+        password: ${SEED_VIEWER_PASSWORD:}
+        password-hash: ${SEED_VIEWER_PASSWORD_HASH:}
+        role: VIEWER
+      - username: ${SEED_OPERATOR_USERNAME:operator}
+        password: ${SEED_OPERATOR_PASSWORD:}
+        password-hash: ${SEED_OPERATOR_PASSWORD_HASH:}
+        role: OPERATOR
+      - username: ${SEED_ADMIN_USERNAME:admin}
+        password: ${SEED_ADMIN_PASSWORD:}
+        password-hash: ${SEED_ADMIN_PASSWORD_HASH:}
+        role: ADMIN

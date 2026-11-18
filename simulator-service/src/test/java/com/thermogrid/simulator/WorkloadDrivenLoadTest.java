@@ -209,7 +209,7 @@ class WorkloadDrivenLoadTest {
             }
             return List.of(view(1, "R11", 40, 0));
         };
-        var props = new WorkloadSyncProperties(false, 60_000, 5_000, 300_000, 1000, "");
+        var props = new WorkloadSyncProperties(false, 60_000, 5_000, 300_000, 1000);
         var sync = new WorkloadSynchronizer(client, loads, props, clock);
 
         assertThat(sync.sync()).isFalse();

@@ -54,6 +54,10 @@ eureka:
 
 # Every tunable value of the simulation lives here (plan section 6A).
 thermogrid:
+  # Phase 9: /internal/** requires X-Internal-Token and Feign sends it. Never blank while security is enabled.
+  internal-token: ${THERMOGRID_INTERNAL_TOKEN:}
+  security:
+    enabled: ${THERMOGRID_SECURITY_ENABLED:true}
   simulator:
     tick-ms: 2000
     scheduling-enabled: true
@@ -101,4 +105,3 @@ thermogrid:
       retry-ms: 5000            # retry period until the first successful load
       tombstone-ttl-ms: 300000  # how long a removed workload id is remembered
       queue-max-length: 50000
-      internal-token: ${THERMOGRID_INTERNAL_TOKEN:}

@@ -1,6 +1,7 @@
 // Prints the state of every dashboard panel as JSON, for the "stop a service, confirm only its panels degrade"
 // checklist (plan Phase 8 testing criteria). Usage: node scripts/snapshot.mjs [baseUrl] [path]
 import puppeteer from 'puppeteer-core';
+import { signIn } from './_login.mjs';
 import fs from 'node:fs';
 import { execSync } from 'node:child_process';
 
@@ -12,7 +13,7 @@ const browser = await puppeteer.launch({ executablePath: CHROME, headless: true,
 const page = await browser.newPage();
 await page.setViewport({ width: 1600, height: 1000 });
 await page.goto(`${BASE}/login`, { waitUntil: 'domcontentloaded' });
-await page.evaluate(() => localStorage.setItem('thermogrid.auth', JSON.stringify({ token: null, user: { username: 'demo-admin', role: 'ADMIN' }, stub: true })));
+await signIn(page, BASE);
 await page.goto(`${BASE}${PATH}`, { waitUntil: 'networkidle2' });
 await new Promise((r) => setTimeout(r, Number(process.env.SETTLE_MS || 5000)));
 

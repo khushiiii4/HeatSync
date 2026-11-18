@@ -1,17 +1,10 @@
 import { useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { LogIn, ShieldAlert } from 'lucide-react';
+import { LogIn } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { errorMessage } from '../api/client';
 import { Wordmark } from '../components/Brand';
-import { Button, Tag, cx, inputCls } from '../components/ui';
-import { ROLES } from '../lib/roles';
-
-const ROLE_HELP = {
-  VIEWER: 'Read-only dashboards',
-  OPERATOR: 'Adds workloads and the Control Room',
-  ADMIN: 'Adds simulator control and seeding',
-};
+import { Button, cx, inputCls } from '../components/ui';
 
 /** Decorative only: a quiet grid echoing the rack heat map. It carries no data. */
 function GridMotif() {
@@ -26,13 +19,12 @@ function GridMotif() {
 }
 
 export default function Login() {
-  const { user, signIn, startDemoSession } = useAuth();
+  const { user, signIn } = useAuth();
   const navigate = useNavigate();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState(null); // { kind: 'credentials' | 'unavailable', text }
-  const [role, setRole] = useState('OPERATOR');
 
   if (user) return <Navigate to="/" replace />;
 
@@ -46,7 +38,7 @@ export default function Login() {
     } catch (err) {
       const status = err?.response?.status;
       if (status === 401 || status === 400) setProblem({ kind: 'credentials', text: 'That username and password were not accepted.' });
-      else setProblem({ kind: 'unavailable', text: `${errorMessage(err)}. The authentication service is delivered in Phase 9.` });
+      else setProblem({ kind: 'unavailable', text: `${errorMessage(err)}. Check that the gateway and auth-service are running.` });
     } finally {
       setBusy(false);
     }
@@ -98,43 +90,6 @@ export default function Login() {
               <LogIn className="h-4 w-4" aria-hidden /> {busy ? 'Signing in…' : 'Sign in'}
             </Button>
           </form>
-
-          <div className="mt-8 rounded-xl border border-ink-600 bg-ink-850/80 p-4">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <p className="flex items-center gap-2 text-sm font-semibold text-fg">
-                <ShieldAlert className="h-4 w-4 text-warn" aria-hidden /> Demo session
-              </p>
-              <Tag tone="warn">Until Phase 9</Tag>
-            </div>
-            <p className="mb-3 text-sm leading-relaxed text-fg-mute">
-              The gateway runs with security switched off until Phase 9. Start a demo session to explore the dashboard; the role only changes what this UI shows.
-            </p>
-            <div className="mb-3 grid grid-cols-3 gap-2" role="radiogroup" aria-label="Demo role">
-              {ROLES.map((r) => (
-                <button
-                  key={r}
-                  type="button"
-                  role="radio"
-                  aria-checked={role === r}
-                  onClick={() => setRole(r)}
-                  className={cx('rounded-lg border px-2 py-2 text-left transition-colors', role === r ? 'border-cyan/60 bg-cyan/10' : 'border-ink-500 bg-ink-800 hover:border-ink-500 hover:bg-ink-700')}
-                >
-                  <span className={cx('block text-xs font-semibold tracking-wide', role === r ? 'text-cyan' : 'text-fg-soft')}>{r}</span>
-                  <span className="mt-0.5 block text-[11px] leading-tight text-fg-mute">{ROLE_HELP[r]}</span>
-                </button>
-              ))}
-            </div>
-            <Button
-              variant="secondary"
-              className="w-full"
-              onClick={() => {
-                startDemoSession(role);
-                navigate('/', { replace: true });
-              }}
-            >
-              Continue as {role.toLowerCase()}
-            </Button>
-          </div>
         </div>
       </div>
     </div>

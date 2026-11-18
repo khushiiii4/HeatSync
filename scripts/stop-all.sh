@@ -5,7 +5,7 @@
 set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUN_DIR="$ROOT/.run"
-ORDER=(api-gateway simulator-service cooling-controller-service scheduler-service workload-service telemetry-service topology-service eureka-server)
+ORDER=(api-gateway simulator-service cooling-controller-service scheduler-service workload-service telemetry-service topology-service auth-service eureka-server)
 
 stop_tree() {   # stop_tree PID : stop the mvnw wrapper and its java child
   local pid="$1"

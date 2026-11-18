@@ -2,6 +2,7 @@
 // Usage: node scripts/screenshots.mjs [baseUrl] [outDir]   (the app and the gateway must be running)
 // Also reports console errors, horizontal overflow and elements that overflow their parent, per page and size.
 import puppeteer from 'puppeteer-core';
+import { signIn } from './_login.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -44,7 +45,7 @@ for (const size of SIZES.filter((s) => !ONLY || s.name.includes(ONLY))) {
   await page.goto(`${BASE}/login`, { waitUntil: 'networkidle2' });
   await page.screenshot({ path: path.join(OUT, `${size.name}-login.png`) });
 
-  await page.evaluate(() => localStorage.setItem('thermogrid.auth', JSON.stringify({ token: null, user: { username: 'demo-admin', role: 'ADMIN' }, stub: true })));
+  await signIn(page, BASE);
   for (const p of PAGES) {
     await page.goto(`${BASE}${p.url}`, { waitUntil: 'networkidle2' });
     await new Promise((r) => setTimeout(r, 3500)); // let the polled panels fill

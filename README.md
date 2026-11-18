@@ -6,7 +6,7 @@ ThermoGrid is a software-simulated data center (4 cooling zones, 16 racks) built
 
 ## Current status
 
-Phases 0 to 8 are implemented (Phase 8 is the React dashboard in `frontend/`, see "Frontend dashboard"): infrastructure, contracts, Eureka and the API gateway, topology, the simulator, telemetry with forecasting and alerts, the workload service, the scheduler (thermal-aware placement, migration, reconcile and HOLD mode) and the cooling controller (proportional control, fault detection, fail-safe, modelled energy). Phase 7 hardened RabbitMQ (queue policies, retry and dead-lettering, publisher confirms, idempotency, startup script). Not built yet: frontend, authentication, deployment. Start everything in the right order with `scripts/start-all.sh` (consumers before producers). See [docs/status.md](docs/status.md) for evidence per item and [docs/decision-log.md](docs/decision-log.md) for decisions.
+Phases 0 to 9 are implemented (Phase 8 is the React dashboard in `frontend/`, Phase 9 adds authentication and security, see "Authentication and security"): infrastructure, contracts, Eureka and the API gateway, topology, the simulator, telemetry with forecasting and alerts, the workload service, the scheduler (thermal-aware placement, migration, reconcile and HOLD mode) and the cooling controller (proportional control, fault detection, fail-safe, modelled energy). Phase 7 hardened RabbitMQ (queue policies, retry and dead-lettering, publisher confirms, idempotency, startup script). Not built yet: Docker/nginx packaging and deployment. Start everything in the right order with `scripts/start-all.sh` (consumers before producers). See [docs/status.md](docs/status.md) for evidence per item and [docs/decision-log.md](docs/decision-log.md) for decisions.
 
 ## Modules
 
@@ -69,7 +69,7 @@ Spring Cloud Gateway 4.3.5 (WebFlux), the only public entry point. It listens on
 java -jar api-gateway/target/api-gateway-0.1.0-SNAPSHOT.jar
 ```
 
-Routes (`/api/auth`, `/api/topology`, `/api/sim`, `/api/telemetry`, `/api/alerts`, `/api/workloads`, `/api/scheduler`, `/api/cooling`) go to `lb://` services through Eureka. `/internal/**` is not routed. `GET /api/platform/services` is served by the gateway. CORS allows `http://localhost:5173` (override with `thermogrid.cors.allowed-origins`). Security is off (`thermogrid.security.enabled=false`) until phase 9.
+Routes (`/api/auth`, `/api/topology`, `/api/sim`, `/api/telemetry`, `/api/alerts`, `/api/workloads`, `/api/scheduler`, `/api/cooling`) go to `lb://` services through Eureka. `/internal/**` is not routed. `GET /api/platform/services` is served by the gateway. CORS allows `http://localhost:5173` (override with `thermogrid.cors.allowed-origins`). Every route except `POST /api/auth/login` requires a JWT (see "Authentication and security").
 
 **Choosing the gateway port.** Set `GATEWAY_PORT` in the environment or in `.env` (see `.env.example`); it feeds `server.port` in `api-gateway/application.yml` (`${GATEWAY_PORT:8080}`). `scripts/start-all.sh` (and the PowerShell twin) reads it, passes it to the gateway, and checks that the port is free before starting anything: if it is taken, the script stops with an error and nothing is killed. Example: `GATEWAY_PORT=18080 scripts/start-all.sh`, then `http://localhost:18080/api/platform/services`. If 8080 is taken (on one development machine `AgentService.exe` holds it), find the owner with `Get-NetTCPConnection -LocalPort 8080 -State Listen`. Running the jar by hand: `GATEWAY_PORT=18080 java -jar ...` or `--server.port=18080`.
 
@@ -137,7 +137,7 @@ Failure types (`durationSec` 0 or omitted means until cleared, otherwise 1 to 86
 
 **RabbitMQ.** Every tick, after the new state is committed, it publishes to the durable topic exchange `thermogrid.events` one `telemetry.rack.reading` per active rack (minus dropouts) and one `telemetry.zone.reading` per zone (20 messages with 16 active racks). Messages use the plan 8.5 envelope with producer `SIMULATOR-SERVICE`, version 1 and persistent delivery. Temperatures and power are rounded to 2 decimals. If the broker is unreachable, the tick's readings are skipped, one warning is logged, the broker is not tried again for 10 s, nothing is buffered, and the simulation keeps running.
 
-**Deferred (not in Bundle 2.3):** the simulator does not yet consume `workload.assigned`, `workload.removed` or `cooling.unit.state`: no queues and no listeners. The contract mapping exists and is tested, and its handler only logs. Applying workload load arrives with Phase 4 and cooling output with Phase 6, so load stays at 60 units per rack and cooling at 40 percent. `POST /api/sim/flood` is deferred to the load-test work. There are no roles on these endpoints until the auth phase.
+**Deferred (not in Bundle 2.3):** the simulator does not yet consume `workload.assigned`, `workload.removed` or `cooling.unit.state`: no queues and no listeners. The contract mapping exists and is tested, and its handler only logs. Applying workload load arrives with Phase 4 and cooling output with Phase 6, so load stays at 60 units per rack and cooling at 40 percent. `POST /api/sim/flood` is deferred to the load-test work. Roles are enforced at the gateway (Phase 9).
 
 Tests use in-memory or temp-directory H2, a stubbed topology client and a mocked RabbitMQ template, so they need no other service.
 
@@ -161,7 +161,7 @@ Overrides: `DB_URL`, `DB_USER`, `DB_PASSWORD`, `RABBITMQ_HOST`, `RABBITMQ_USER`,
 | `GET /api/telemetry/racks/{rackId}/history?minutes=10` | Readings of the last 1 to 360 minutes with the forecast series (replayed through the same forecast engine) |
 | `GET /api/telemetry/zones/latest` | Newest reading per zone |
 | `GET /api/alerts?state=ACTIVE&limit=50` | Alerts, newest first. `state` is ACTIVE, CLEARED or ALL; `limit` 1 to 500 |
-| `GET /internal/telemetry/racks/latest` | The rack view for the scheduler, plus `lastReadingAt`. Not routed by the gateway; the token check arrives with auth |
+| `GET /internal/telemetry/racks/latest` | The rack view for the scheduler, plus `lastReadingAt`. Not routed by the gateway; requires `X-Internal-Token` |
 
 **RabbitMQ.** It declares `thermogrid.events` (topic, durable), the dead-letter exchange `thermogrid.dlx` and queue `thermogrid.dlq` (bound with `#`), and two durable queues: `q.telemetry.rack-readings` (key `telemetry.rack.reading`, max 50,000) and `q.telemetry.zone-readings` (key `telemetry.zone.reading`, max 20,000). Both have no TTL, drop the oldest when full and dead-letter to `thermogrid.dlx`. A failing message is tried 3 times (1 s, 2 s, 4 s backoff) and then rejected without requeue, so it lands in `thermogrid.dlq`. Malformed or impossible messages (bad JSON, NaN, out-of-range values) skip the retries and go to the DLQ at once. A message is acknowledged only after its database transaction committed. Messages dropped because a queue is full are also dead-lettered by RabbitMQ.
 
@@ -190,7 +190,7 @@ GATEWAY_PORT=18080 npm run preview   # serve the production bundle on :4173
 
 | Route | Page | Role |
 |-------|------|------|
-| `/login` | Sign in, or start a demo session (security is off until Phase 9) | public |
+| `/login` | Sign in with a username and password (real JWT login, Phase 9) | public |
 | `/` | Overview: KPI strip, service health strip, rack heat map, active alerts, decision feed, cooling zone cards, workload distribution | VIEWER+ |
 | `/racks/:rackId` | Rack detail: temperature and forecast chart (10 min), power and CPU chart, workloads on the rack, alerts for the rack | VIEWER+ |
 | `/workloads` | Table with filters, submit form, remove, CPU by rack stacked by priority, pending queue, capacity banner | VIEWER+ (submit and remove: OPERATOR) |
@@ -200,7 +200,19 @@ GATEWAY_PORT=18080 npm run preview   # serve the production bundle on :4173
 
 How it behaves when services fail: every data source is a separate polled query (2 to 5 s, per plan 9.4) inside its own panel and error boundary. When a service stops, only the panels fed by it show a stale badge ("Scheduler unavailable, last update 12:41:05", time from the server) and keep their last data; everything else keeps updating, and the service health strip shows healthy, degraded, unavailable or stale per service. Polling pauses while the tab is hidden. The checklist is automated by `frontend/scripts/stale-check.sh <service-name>`; `frontend/scripts/screenshots.mjs` captures every page at three resolutions and flags overflow and console errors; `frontend/scripts/scenario.mjs degrade|fail` drives a plan scenario through the Control Room UI. Screenshots are in `docs/screenshots/`.
 
-Phase 8 limits: no authentication enforcement (Phase 9), polling only (no SSE), no Docker or nginx packaging yet (Phase 12).
+Limits: polling only (no SSE), no Docker or nginx packaging yet (Phase 12).
+
+## Authentication and security (Phase 9)
+
+**To run and demonstrate the project, start with [docs/USER-RUN-GUIDE.md](docs/USER-RUN-GUIDE.md).**
+
+- `auth-service` (port 8081, Eureka `AUTH-SERVICE`, schema `auth_db`): `POST /api/auth/login` returns `{token, tokenType: "Bearer", expiresInSeconds: 28800, user: {username, role}}`; `GET /api/auth/me` returns the current user. Passwords are BCrypt hashes; tokens are HS256 JWTs (JJWT) carrying the username (`sub`) and `role`. Demo users `viewer`, `operator`, `admin` are seeded from `.env` (`SEED_*_PASSWORD`), never from source code.
+- `api-gateway` `JwtAuthFilter` is the single enforcement point: no token, expired, malformed or tampered token gives **401**; an insufficient role gives **403**; incoming `X-User-Name` and `X-User-Role` are removed and re-set from the verified token; `/internal/**` is always **404**; CORS preflight needs no token.
+- Roles: **VIEWER** reads everything. **OPERATOR** adds writes (workloads, autopilot, rebalance, cooling mode, failure injection). **ADMIN** adds `POST /api/sim/control` and `POST /api/workloads/seed-demo`. Any other write defaults to OPERATOR.
+- Internal calls: every service with `/internal/**` endpoints rejects a missing or wrong `X-Internal-Token` with **401**; every Feign client sends it (module `thermogrid-internal-security`).
+- Configuration (see `.env.example`): `THERMOGRID_JWT_SECRET` (at least 32 characters), `THERMOGRID_INTERNAL_TOKEN`, `SEED_VIEWER_PASSWORD` / `SEED_OPERATOR_PASSWORD` / `SEED_ADMIN_PASSWORD` (or `..._PASSWORD_HASH`), `THERMOGRID_SECURITY_ENABLED` (default `true`, leave it), `GATEWAY_PORT`. Services refuse to start without the secrets. Nothing secret is committed.
+- Frontend: real login form, JWT kept in memory and localStorage (lab demo, plan 9.6), `Authorization` header on every call, 401 returns to login, 403 shows a toast, Control Room and write controls hidden by role.
+- Lab limits (not for production): token in localStorage, HS256 shared secret, no rate limiting or lockout on login, no refresh tokens or revocation (a token is valid until it expires, 8 h), HTTP not HTTPS.
 
 ## Messaging reliability (Phase 7)
 

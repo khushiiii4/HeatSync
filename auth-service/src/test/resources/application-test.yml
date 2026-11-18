@@ -1,0 +1,28 @@
+# Test profile: in-memory H2, never the developer MySQL. Test-only secret and passwords.
+spring:
+  datasource:
+    url: jdbc:h2:mem:auth_test;DB_CLOSE_DELAY=-1;MODE=MySQL
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+eureka:
+  client:
+    enabled: false
+thermogrid:
+  auth:
+    jwt-secret: test-only-secret-0123456789-0123456789-abcdef
+    seed-users:
+      - username: viewer
+        password: test-viewer-pw
+        password-hash: ""
+        role: VIEWER
+      - username: operator
+        password: test-operator-pw
+        password-hash: ""
+        role: OPERATOR
+      - username: admin
+        password: test-admin-pw
+        password-hash: ""
+        role: ADMIN

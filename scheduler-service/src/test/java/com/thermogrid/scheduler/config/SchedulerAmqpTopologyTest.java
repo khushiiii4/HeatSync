@@ -24,7 +24,7 @@ import org.springframework.amqp.rabbit.annotation.RabbitListener;
 class SchedulerAmqpTopologyTest {
 
     private final SchedulerProperties.Amqp amqp = new SchedulerProperties.Amqp(60000, 50000);
-    private final SchedulerProperties props = new SchedulerProperties(true, true, true, "", 5000, 3000, 30, 30, 500,
+    private final SchedulerProperties props = new SchedulerProperties(true, true, true, 5000, 3000, 30, 30, 500,
             24, 600000, null, null, amqp);
     private final AmqpConfig config = new AmqpConfig();
 

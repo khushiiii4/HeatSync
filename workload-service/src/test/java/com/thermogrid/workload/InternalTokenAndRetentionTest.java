@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.TestPropertySource;
 
-@TestPropertySource(properties = "thermogrid.workload.internal-token=s3cret")
+@TestPropertySource(properties = {"thermogrid.security.enabled=true", "thermogrid.internal-token=s3cret"})
 class InternalTokenAndRetentionTest extends WorkloadTestBase {
 
     @Autowired RetentionJob retention;

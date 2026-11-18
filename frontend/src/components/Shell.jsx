@@ -94,7 +94,7 @@ function TopBar() {
   const qc = useQueryClient();
   const fetching = useIsFetching();
   const toast = useToast();
-  const { user, role, stub, logout } = useAuth();
+  const { user, role, logout } = useAuth();
   const services = useServices();
   const racks = useRacks();
   const sources = useSourceHealth();
@@ -142,7 +142,6 @@ function TopBar() {
               <p className="text-sm font-medium text-fg">{user?.username}</p>
               <p className="text-[11px] font-semibold uppercase tracking-wide text-fg-mute">
                 {role}
-                {stub ? ' · demo' : ''}
               </p>
             </div>
             <Button

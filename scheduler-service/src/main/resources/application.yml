@@ -60,11 +60,14 @@ eureka:
     lease-expiration-duration-in-seconds: 9
 
 thermogrid:
+  # Phase 9: /internal/** requires X-Internal-Token and Feign sends it. Never blank while security is enabled.
+  internal-token: ${THERMOGRID_INTERNAL_TOKEN:}
+  security:
+    enabled: ${THERMOGRID_SECURITY_ENABLED:true}
   scheduler:
     scheduling-enabled: true
     listeners-enabled: true
     single-instance-lock: true
-    internal-token: ${THERMOGRID_INTERNAL_TOKEN:}
     reconcile-ms: 5000          # ReconcileScheduler (plan section 5)
     pending-ms: 3000            # PendingPlacementScheduler
     event-max-age-sec: 30       # events older than this are not acted on
