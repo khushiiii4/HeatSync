@@ -53,6 +53,14 @@ Start MySQL 8.4 and RabbitMQ 3.13 from the repository root:
 - RabbitMQ: AMQP `127.0.0.1:5672`, management UI http://127.0.0.1:15672 (login from `RABBITMQ_USER` / `RABBITMQ_PASSWORD`).
 - Init scripts in `infra/mysql/init` run only on a fresh volume. To re-initialise: `docker compose --env-file .env -f infra/docker-compose.yml down -v` (deletes all data) then `up -d`.
 
+## Eureka server
+
+Build first (`mvnw -DskipTests package`), then from the repository root:
+
+```n java -jar eureka-server/target/eureka-server-0.1.0-SNAPSHOT.jar
+```n
+Or during development: `.\mvnw.cmd -pl eureka-server spring-boot:run`. Dashboard: http://localhost:8761. Dev timers apply (3 s renewal, 9 s expiry, 3 s eviction, self-preservation off): every client service must set `eureka.instance.lease-renewal-interval-in-seconds: 3` and `lease-expiration-duration-in-seconds: 9`.
+
 ## Repository layout
 
 ```

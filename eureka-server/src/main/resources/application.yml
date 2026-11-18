@@ -1,0 +1,25 @@
+server:
+  port: 8761
+
+spring:
+  application:
+    name: eureka-server
+
+eureka:
+  instance:
+    hostname: localhost
+    # Lease timers (plan: 3 s renewal, 9 s expiry). They apply per instance, so every client
+    # service must set the same values to be evicted within ~9 s.
+    lease-renewal-interval-in-seconds: 3
+    lease-expiration-duration-in-seconds: 9
+  client:
+    # The registry does not register with itself or fetch its own registry.
+    register-with-eureka: false
+    fetch-registry: false
+    service-url:
+      defaultZone: http://${eureka.instance.hostname}:${server.port}/eureka/
+  server:
+    # Development timers from plan sections 4 and 13.3. Restore defaults for anything long-running.
+    enable-self-preservation: false
+    eviction-interval-timer-in-ms: 3000
+    response-cache-update-interval-ms: 3000

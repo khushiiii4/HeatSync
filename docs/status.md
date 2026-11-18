@@ -1,6 +1,6 @@
 # Status register
 
-Mirrors the checklist in plan section 15.9. An item is Done only when its listed test was run and passed (plan rule 10). Last updated: 2026-11-18, end of Bundle 1.1.
+Mirrors the checklist in plan section 15.9. An item is Done only when its listed test was run and passed (plan rule 10). Last updated: 2026-11-18, end of Bundle 1.2.
 
 ## Phase 0: Environment and repository setup
 
@@ -23,7 +23,7 @@ Phase 0 is not closed: the branch has not been pushed or merged, and the full-te
 | Item | Status | Evidence / note |
 |------|--------|-----------------|
 | thermogrid-contracts: envelope, payload records, Exchanges, RoutingKeys, Headers (Bundle 1.1) | Done | 23 JUnit tests pass (`mvnw package`, BUILD SUCCESS); a deliberate field rename was caught by the tests |
-| eureka-server | Pending | |
+| eureka-server (Bundle 1.2) | Done | `mvnw package` BUILD SUCCESS, context-load test passes; ran the JAR: dashboard HTTP 200 on 8761; a probe instance with a 9 s lease was evicted ~12 s after its last renewal; self-preservation reported OFF |
 | api-gateway (routes, CORS, fallback, platform endpoint) | Pending | |
 
 ## Phases 2 to 13
