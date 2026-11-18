@@ -15,6 +15,5 @@ public record WorkloadSyncProperties(
         @Positive long reconcileMs,
         @Positive long retryMs,
         @Positive long tombstoneTtlMs,
-        @Positive int queueMaxLength,
-        String internalToken) {
+        @Positive int queueMaxLength) {
 }

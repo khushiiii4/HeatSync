@@ -12,7 +12,6 @@ import org.springframework.validation.annotation.Validated;
 @ConfigurationProperties("thermogrid.workload")
 public record WorkloadProperties(
         boolean schedulingEnabled,
-        String internalToken,
         @NotBlank String producer,
         @Min(1) int eventVersion,
         @Min(1) int maxBulk,

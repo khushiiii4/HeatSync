@@ -1,7 +1,6 @@
-package com.thermogrid.workload.api;
+package com.thermogrid.internalsecurity;
 
 import com.thermogrid.contracts.Headers;
-import com.thermogrid.workload.config.WorkloadProperties;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -9,26 +8,25 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-/**
- * Requires {@code X-Internal-Token} on {@code /internal/**} when a token is configured. With a blank token the check
- * is off (local development). Real authentication arrives in a later phase.
- */
-@Component
+/** Requires {@code X-Internal-Token} on every {@code /internal/**} request; other paths pass untouched. */
 public class InternalTokenFilter extends OncePerRequestFilter {
 
     private final byte[] expected;
 
-    public InternalTokenFilter(WorkloadProperties props) {
-        String t = props.internalToken();
-        this.expected = t == null || t.isBlank() ? null : t.getBytes(StandardCharsets.UTF_8);
+    public InternalTokenFilter(String token) {
+        if (token == null || token.isBlank()) {
+            throw new IllegalStateException(
+                    "THERMOGRID_INTERNAL_TOKEN must be set when thermogrid.security.enabled=true");
+        }
+        this.expected = token.getBytes(StandardCharsets.UTF_8);
     }
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return expected == null || !request.getRequestURI().startsWith("/internal/");
+        String path = request.getRequestURI();
+        return !(path.equals("/internal") || path.startsWith("/internal/"));
     }
 
     @Override

@@ -14,7 +14,6 @@ public record SchedulerProperties(
         boolean schedulingEnabled,
         boolean listenersEnabled,
         boolean singleInstanceLock,
-        String internalToken,
         @Positive long reconcileMs,
         @Positive long pendingMs,
         @Positive long eventMaxAgeSec,

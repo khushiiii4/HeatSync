@@ -5,9 +5,6 @@ import { useSourceHealth } from '../state/sourceHealth';
 import { fmtClock, shortService } from '../lib/format';
 import { Skeleton, cx } from './ui';
 
-// Auth-service is part of Phase 9. Until it is deployed the gateway truthfully reports it DOWN; the strip shows it
-// as "not deployed" in a neutral tone instead of a red alarm, with the reason in its tooltip.
-const NOT_YET_DEPLOYED = new Set(['AUTH-SERVICE']);
 const ORDER = ['API-GATEWAY', 'AUTH-SERVICE', 'TOPOLOGY-SERVICE', 'SIMULATOR-SERVICE', 'TELEMETRY-SERVICE', 'WORKLOAD-SERVICE', 'SCHEDULER-SERVICE', 'COOLING-CONTROLLER-SERVICE'];
 
 const STATE = {
@@ -15,17 +12,16 @@ const STATE = {
   degraded: { dot: 'bg-warn', text: 'text-warn', label: 'Degraded' },
   unavailable: { dot: 'bg-crit', text: 'text-crit', label: 'Unavailable' },
   stale: { dot: 'bg-fg-mute', text: 'text-fg-mute', label: 'Stale' },
-  idle: { dot: 'bg-ink-500', text: 'text-fg-faint', label: 'Not deployed' },
 };
 
-/** Classify every expected service: healthy, degraded, unavailable, stale (or idle for services not yet deployed). */
+/** Classify every expected service: healthy, degraded, unavailable, stale. */
 export function classify(services, sources, registryStale) {
   const failingByService = new Set(Object.values(sources).filter((s) => s.failing && s.service).map((s) => s.service));
   return ORDER.map((name) => {
     const svc = services.find((s) => s.name === name) || { name, instances: 0, status: 'DOWN' };
     let state;
     if (registryStale) state = 'stale';
-    else if (svc.status !== 'UP') state = NOT_YET_DEPLOYED.has(name) ? 'idle' : 'unavailable';
+    else if (svc.status !== 'UP') state = 'unavailable';
     else if (failingByService.has(name)) state = 'degraded';
     else state = 'healthy';
     return { ...svc, state };
@@ -58,9 +54,7 @@ export function ServiceHealthStrip() {
       {items.map((s) => {
         const st = STATE[s.state];
         const tip =
-          s.state === 'idle'
-            ? `${s.name}: not part of the running stack until Phase 9 (authentication)`
-            : `${s.name}: ${st.label.toLowerCase()}${s.status === 'UP' ? `, ${s.instances} instance${s.instances === 1 ? '' : 's'}` : ', no registered instance'}${s.state === 'stale' ? `, last update ${fmtClock(reg.lastServerTime)}` : ''}`;
+          `${s.name}: ${st.label.toLowerCase()}${s.status === 'UP' ? `, ${s.instances} instance${s.instances === 1 ? '' : 's'}` : ', no registered instance'}${s.state === 'stale' ? `, last update ${fmtClock(reg.lastServerTime)}` : ''}`;
         return (
           <span key={s.name} role="listitem" title={tip} className={cx('inline-flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm font-medium', st.text, s.state === 'healthy' ? '' : 'bg-ink-800/80 ring-1 ring-inset ring-ink-600')}>
             <span className={cx('h-2 w-2 rounded-full', st.dot, s.state === 'healthy' && 'live-dot')} aria-hidden />

@@ -2,8 +2,8 @@
 .SYNOPSIS
   Starts ThermoGrid for local development in plan section 13 order (consumers before producers).
 .DESCRIPTION
-  1 MySQL and RabbitMQ (Docker), 2 eureka-server, 3 topology, 4 telemetry, 5 workload, 6 scheduler,
-  7 cooling controller, 8 simulator, 9 api-gateway. Mirrors scripts/start-all.sh.
+  1 MySQL and RabbitMQ (Docker), 2 eureka-server, 3 auth, 4 topology, 5 telemetry, 6 workload, 7 scheduler,
+  8 cooling controller, 9 simulator, 10 api-gateway. Mirrors scripts/start-all.sh.
   -DryRun      print the plan and readiness checks, start nothing
   -SkipBuild   do not run "mvnw install" first
   -NoInfra     do not touch Docker (assume MySQL and RabbitMQ run)
@@ -20,6 +20,7 @@ $Eureka = if ($env:EUREKA_BASE) { $env:EUREKA_BASE } else { 'http://localhost:87
 # name, module, port, eureka application ('-' = not registered)
 $Services = @(
   @('eureka-server', 'eureka-server', 8761, '-'),
+  @('auth-service', 'auth-service', 8081, 'AUTH-SERVICE'),
   @('topology-service', 'topology-service', 8082, 'TOPOLOGY-SERVICE'),
   @('telemetry-service', 'telemetry-service', 8084, 'TELEMETRY-SERVICE'),
   @('workload-service', 'workload-service', 8085, 'WORKLOAD-SERVICE'),
@@ -78,7 +79,7 @@ if (-not $DryRun -and -not $SkipBuild) {
 }
 
 if (-not $NoInfra) {
-  Say '1/9 infrastructure: MySQL and RabbitMQ'
+  Say '1/10 infrastructure: MySQL and RabbitMQ'
   if ($DryRun) { Say '(dry run) docker compose up -d ; wait healthy: thermogrid-mysql thermogrid-rabbitmq' }
   else {
     Push-Location $Root; docker compose --env-file .env -f infra/docker-compose.yml up -d; $rc = $LASTEXITCODE; Pop-Location
@@ -92,7 +93,7 @@ if (-not $NoInfra) {
 $i = 2
 foreach ($s in $Services) {
   $name, $module, $port, $app = $s
-  Say "$i/9 $name (port $port)"
+  Say "$i/10 $name (port $port)"
   $i++
   if ($DryRun) { Say "(dry run) start $name in $module ; wait for port $port and Eureka status UP for $app"; continue }
   $pidFile = Join-Path $RunDir "$name.pid"

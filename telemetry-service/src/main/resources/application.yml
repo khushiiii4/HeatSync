@@ -49,6 +49,10 @@ eureka:
 
 # Every tunable value of forecasting, risk, stale detection and retention (plan sections 6B and 7).
 thermogrid:
+  # Phase 9: /internal/** requires X-Internal-Token and Feign sends it. Never blank while security is enabled.
+  internal-token: ${THERMOGRID_INTERNAL_TOKEN:}
+  security:
+    enabled: ${THERMOGRID_SECURITY_ENABLED:true}
   telemetry:
     scheduling-enabled: true
     listeners-enabled: true

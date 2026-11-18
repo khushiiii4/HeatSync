@@ -1,6 +1,6 @@
 # Status register
 
-Mirrors the checklist in plan section 15.9. An item is Done only when its listed test was run and passed (plan rule 10). Last updated: 2026-11-19, Phase 8 (frontend dashboard).
+Mirrors the checklist in plan section 15.9. An item is Done only when its listed test was run and passed (plan rule 10). Last updated: 2026-11-19, Phase 9 (authentication and security).
 
 ## Phase 0: Environment and repository setup
 
@@ -215,3 +215,24 @@ Gaps and limits: no authentication enforcement or real JWT flow (Phase 9); the r
 ## Optional (plan section 2 cut list and 15.5)
 
 All Pending and not started.
+
+## Phase 9: Authentication and security
+
+Source: architecture plan sections 8.1, 9.6 and roadmap Phase 9 (decisions D-084 to D-090). New: `auth-service`, module `thermogrid-internal-security`, gateway `JwtAuthFilter`, real frontend login, `docs/USER-RUN-GUIDE.md`.
+
+| Item | Status | Evidence / note |
+|------|--------|-----------------|
+| auth-service: `POST /api/auth/login`, `GET /api/auth/me`, BCrypt, JJWT HS256, seeded demo users from configuration, Eureka, `auth_db` | Done | 11 tests (login shape, token claims, identical 401 for unknown user and wrong password, tampered and malformed tokens, hashes only in the database, expiry and wrong-key rejection). Runtime: registered as AUTH-SERVICE on 8081, MySQL `auth_db` with the existing `auth` user |
+| Gateway `JwtAuthFilter` and role rules | Done | 20 new gateway tests (28 in the module): no token, expired, tampered, wrong key, `alg: none`, missing claims and malformed headers all 401; VIEWER POST 403; OPERATOR `/api/sim/control` and seed-demo 403; ADMIN allowed; forged `X-User-Role` ignored and replaced; `/internal/**` 404 with or without credentials; 401 and 403 carry CORS headers; encoded or doubled-slash paths refused; startup fails without a 32-character secret |
+| `/internal/**` token protection in topology, telemetry, workload; Feign token in scheduler, simulator, cooling | Done | 8 module tests (filter, Feign interceptor, fail-fast, disabled flag) plus per-service tests: topology, telemetry and workload return 401 without or with a wrong token and 200 with the right one while their public API stays open; scheduler, simulator and cooling Feign interceptors add `X-Internal-Token` exactly once |
+| Frontend: real login, JWT in memory and localStorage, Axios header, 401 redirect, 403 toast, role-based hiding, session expiry | Done | 11 new tests in `src/auth/auth.test.jsx`. `npm test`: 6 files, 64 tests pass. `npm run build` succeeds |
+| Real-browser check | Done | `frontend/scripts/verify-roles.mjs` against the live secured stack, all checks pass: each role signs in through the form; VIEWER has no Control Room link and `/control` redirects; OPERATOR sees the Control Room without simulator controls; ADMIN sees them; sign-out clears the token; a tampered stored token ends the session on the login page; a VIEWER browser call to `/api/sim/control` gets 403 |
+| End-to-end through the gateway on port 18080 (real services, MySQL, Eureka) | Done | No token 401; wrong password and unknown user identical 401; VIEWER GET 200, POST 403; OPERATOR `/api/sim/control` 403, autopilot 200, failure injection 200 (`injectedBy: operator`) and clear 200; ADMIN pause and resume 200; forged `X-User-Role: ADMIN` with a VIEWER token 403; gateway `/internal/topology` 404 (with and without an ADMIN token); direct `/internal/topology`, `/internal/workloads` and `/internal/telemetry/racks/latest` 401 without a token, 401 with a wrong token, 200 with the right one; tampered token 401. The same commands were repeated with PowerShell `Invoke-RestMethod` and `curl.exe` as written in the guide |
+| Existing service-to-service calls after security is on | Done | Seeding found 36 running workloads, scheduler status NORMAL with autopilot on, simulator ticking, telemetry for 16 racks, cooling summary populated; no 401 or Feign errors in any service log |
+| No secrets in logs | Done | The JWT secret, the internal token and the three demo passwords were searched for (exact strings) in every `.run/logs/*.log`: zero matches |
+| Scripts | Done, one gap | `start-all.sh` and `.ps1` start auth-service (step 3 of 10); `stop-all` stops it; `test-start-order.sh` updated. `start-all.sh` ran for real. Stopping the scheduler and rerunning it with `SKIP_BUILD=1 START_INFRA=0` restarted only the scheduler. The `.ps1` start script was only checked with `-DryRun` |
+| Full Maven build | Done | `./mvnw clean verify`: BUILD SUCCESS, 12 modules, 0 failures. Tests: contracts 23, internal-security 8, eureka 1, gateway 28, auth 11, topology 16, simulator 142, telemetry 106, workload 29, scheduler 104, cooling 76 (live-broker tests skipped in this run, see next row) |
+| RabbitMQ live tests | Done | Against a throwaway broker (`rabbitmq:3.13-management` on port 25672, removed afterwards; the real broker was not touched): simulator 4/4, telemetry 4 pass and 1 skipped (it needs `THERMOGRID_LIVE_RABBIT_CONTAINER` to restart a container), scheduler 4/4, cooling 2/2 |
+| Phase 8 dashboard after login | Done | The browser run loaded the Overview, Workloads and Control Room as each role with live data and no page errors; the service strip shows Auth healthy |
+
+Gaps and limits: login has no rate limiting or lockout; tokens cannot be revoked before the 8-hour expiry and there is no refresh token; the JWT is in localStorage (accepted for the lab, plan 9.6); traffic is plain HTTP; CORS does not allow `PATCH` and no endpoint uses it; the full scripted degrade and fail scenarios (`frontend/scripts/scenario.mjs`) were not re-run after authentication was added (a Z2 degradation injected as OPERATOR through the API produced a predicted alert); the PowerShell start script was not run for real, only its dry run; the Phase 8 screenshots in `docs/screenshots/` predate authentication; HTTPS and Docker or nginx packaging remain Phase 12.

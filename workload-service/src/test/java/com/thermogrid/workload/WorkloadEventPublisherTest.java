@@ -86,7 +86,7 @@ class WorkloadEventPublisherTest extends WorkloadTestBase {
         RabbitOperations ops = mock(RabbitOperations.class);
         doThrow(new AmqpConnectException(new java.io.IOException("down"))).doNothing().when(ops)
                 .send(any(String.class), any(String.class), any(Message.class));
-        var props = new WorkloadProperties(false, "", "WORKLOAD-SERVICE", 1, 10, 3, 0,
+        var props = new WorkloadProperties(false, "WORKLOAD-SERVICE", 1, 10, 3, 0,
                 new WorkloadProperties.Retention(7, 1000));
         var publisher = new WorkloadEventPublisher(ops, mapper(), props);
         publisher.onCommitted(new WorkloadEvent("workload.removed", new WorkloadRemovedData(1, "R11", 10), Instant.now()));
@@ -98,7 +98,7 @@ class WorkloadEventPublisherTest extends WorkloadTestBase {
         RabbitOperations ops = mock(RabbitOperations.class);
         doThrow(new AmqpConnectException(new java.io.IOException("down"))).when(ops)
                 .send(any(String.class), any(String.class), any(Message.class));
-        var props = new WorkloadProperties(false, "", "WORKLOAD-SERVICE", 1, 10, 3, 0,
+        var props = new WorkloadProperties(false, "WORKLOAD-SERVICE", 1, 10, 3, 0,
                 new WorkloadProperties.Retention(7, 1000));
         new WorkloadEventPublisher(ops, mapper(), props)
                 .onCommitted(new WorkloadEvent("workload.removed", new WorkloadRemovedData(1, "R11", 10), Instant.now()));

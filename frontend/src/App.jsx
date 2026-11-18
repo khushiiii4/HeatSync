@@ -21,7 +21,10 @@ function Protected({ minRole, children }) {
 function Routed() {
   const toast = useToast();
   return (
-    <AuthProvider onForbidden={() => toast.error('Not permitted', 'Your role does not allow that action.')}>
+    <AuthProvider
+      onForbidden={() => toast.error('Not permitted', 'Your role does not allow that action.')}
+      onSessionEnded={(why) => toast.warn(why === 'expired' ? 'Session expired' : 'Signed out', 'Please sign in again to continue.')}
+    >
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route element={<Protected><Shell /></Protected>}>

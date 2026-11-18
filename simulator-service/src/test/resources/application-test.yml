@@ -7,6 +7,9 @@ eureka:
     enabled: false
 
 thermogrid:
+  # Test profile only: dedicated tests switch internal-token enforcement back on.
+  security:
+    enabled: false
   simulator:
     scheduling-enabled: false
     publishing:

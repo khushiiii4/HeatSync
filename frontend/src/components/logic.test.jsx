@@ -22,11 +22,11 @@ const services = [
 const byName = (items) => Object.fromEntries(items.map((i) => [i.name, i.state]));
 
 describe('service health classification', () => {
-  it('distinguishes healthy, unavailable and not-yet-deployed', () => {
+  it('distinguishes healthy and unavailable', () => {
     const s = byName(classify(services, {}, false));
     expect(s['TELEMETRY-SERVICE']).toBe('healthy');
     expect(s['SCHEDULER-SERVICE']).toBe('unavailable');
-    expect(s['AUTH-SERVICE']).toBe('idle');
+    expect(s['AUTH-SERVICE']).toBe('unavailable'); // not in the registry list above
   });
 
   it('marks a registered service as degraded when its data source is failing', () => {
@@ -39,7 +39,7 @@ describe('service health classification', () => {
   });
 
   it('summarises the whole platform', () => {
-    expect(overallStatus(classify(services, {}, false), false)).toEqual({ tone: 'crit', text: '1 service unavailable' });
+    expect(overallStatus(classify(services, {}, false), false)).toEqual({ tone: 'crit', text: '2 services unavailable' });
     expect(overallStatus([], true).text).toBe('Gateway unreachable');
     const ok = services.map((s) => ({ ...s, status: 'UP' }));
     expect(overallStatus(classify(ok, {}, false), false).text).toBe('All systems operational');

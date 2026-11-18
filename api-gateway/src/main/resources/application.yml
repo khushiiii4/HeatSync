@@ -111,7 +111,11 @@ eureka:
 
 thermogrid:
   security:
-    # Phase 9 switches this on. No JWT filter, role rules or token checks exist yet.
-    enabled: false
+    # JWT authentication and role rules at the gateway. On for the secured setup (the default). Only tests or
+    # a deliberate local experiment should set THERMOGRID_SECURITY_ENABLED=false.
+    enabled: ${THERMOGRID_SECURITY_ENABLED:true}
+    # HS256 signing secret shared with auth-service, at least 32 characters. No default: the gateway refuses to
+    # start without it while security is enabled.
+    jwt-secret: ${THERMOGRID_JWT_SECRET:}
   cors:
     allowed-origins: http://localhost:5173

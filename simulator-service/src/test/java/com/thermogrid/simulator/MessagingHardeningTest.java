@@ -32,7 +32,7 @@ class MessagingHardeningTest {
 
     private final SimulatorEventHandler handler = mock(SimulatorEventHandler.class);
     private final SimulatorEventDispatcher dispatcher = new SimulatorEventDispatcher(MAPPER, handler);
-    private final WorkloadSyncProperties props = new WorkloadSyncProperties(true, 60000, 5000, 300000, 50000, "");
+    private final WorkloadSyncProperties props = new WorkloadSyncProperties(true, 60000, 5000, 300000, 50000);
 
     private static byte[] json(String type, int version, String data) {
         return ("{\"eventId\":\"0b8e5c1e-6f3a-4a9e-8d57-1c2b3a4d5e6f\",\"eventType\":\"" + type
