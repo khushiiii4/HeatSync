@@ -1,6 +1,6 @@
 # Demo script (about 10 minutes)
 
-Source: plan section 10 (scenarios 1 to 8; scenario 9 is an optional extra) and roadmap Phase 13. Every timing below was **measured on the development machine** (local services, Windows 11) in the Phase 11 and Phase 13 runs; it will differ on another machine. **The full demo has not yet been rehearsed end to end by a person** (see `docs/demo-checklists.md`), and **no lab-server deployment exists yet**: the demo runs from the development machine or from the Docker stack on it.
+Source: plan section 10 (scenarios 1 to 8; scenario 9 is an optional extra) and roadmap Phase 13. Every timing below was **measured on the development machine** (local services, Windows 11) in the Phase 11 and Phase 13 runs; it will differ on another machine. **The full demo has not yet been rehearsed end to end by a person** (see `docs/demo-checklists.md`), and **there is no lab server**: the demo runs from Docker (or the local services) on your own computer.
 
 ## Before you start (5 minutes, not part of the 10)
 
@@ -76,5 +76,5 @@ If you are behind, drop part 5 (it is shown again as part of part 4) or shorten 
 - **Why 0.15 and not 0.25.** Plan section 10 uses a remaining efficiency of 0.25. With the cooling controller running, 0.25 only reached WATCH (Z2 peaked at about 31 C), so scenarios 3 and 4 did not happen. Measured: 0.20 reached 32.8 C (still WATCH) and 0.15 gave a PREDICTED WARNING and migrations. The Control Room preset now uses 0.15 (decision D-093).
 - The measured numbers come from the automated runs of `scripts/failure-tests.sh` (three consecutive full passes) and from `scripts/reset-demo.sh`; they are not from a rehearsed live demo.
 - Autopilot off against on (plan presenter note) is possible but not scripted here: switch Autopilot off in the Control Room, repeat part 3, and watch Z2 heat unmanaged by migration; switch it on again.
-- **Lab server:** not deployed. If the demo is given from a lab URL, that deployment must be done and checked first (`docs/performance.md`, section 6).
+- **No lab server.** The final demonstration runs from the Docker stack on your own computer (README, "Run the whole system with Docker"). No lab URL exists.
 - **If something goes wrong:** run `scripts/reset-demo.sh`; if a service shows red, `scripts/start-all.sh` (local) or `docker compose ... up -d` (Docker) starts what is missing; use the backup screenshots and, if one was recorded, the backup video (`docs/demo-checklists.md`).

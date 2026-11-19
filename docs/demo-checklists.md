@@ -31,7 +31,7 @@ Save to `docs/screenshots/` (PNG, 1440 x 900 or larger). `frontend/scripts/scree
 | 12 | RabbitMQ Queues page (consumers present, `thermogrid.dlq` empty) | To do |
 | 13 | Architecture slide | Done: `docs/slides/architecture.png` (rendered from `architecture.html`) |
 | 14 | k6 summary and flood queue graph (1 against 3 telemetry instances) | To do: the numbers are in `docs/performance.md`; capture the terminal and the RabbitMQ chart if you rerun them |
-| 15 | `docker compose ps` and Eureka with 3 telemetry instances **on the lab server** | **Blocked**: lab-server deployment is pending |
+| 15 | `docker compose ps` and Eureka with 3 telemetry instances (Docker stack on your computer) | To do: capture during the final rehearsal |
 
 ## C. Backup video (not recorded)
 
@@ -56,10 +56,10 @@ Acceptance for each run: the whole script from `docs/demo-script.md` finishes in
 
 - [ ] Run 1 done and recorded    - [ ] Run 2 done and recorded    - [ ] Run 3 done and recorded
 - [ ] Viva answers rehearsed aloud (`docs/viva.md`: database per service, events, polling, proportional controller).
-- [ ] If the lab server is used for the real demo: do at least one rehearsal on the lab URL itself.
+- [ ] Do at least one rehearsal from the Docker stack itself (the final deployment), not only from locally started services.
 
 ## E. Still open before the real demo
 
-- Deploy to the lab server and record the lab URL, `docker compose ps` and a k6 run there (`docs/performance.md`, section 6).
+- Run the final Docker stack once from a clean `docker compose down` (README) and keep `docker compose ps` output as evidence.
 - Perform and record the three rehearsals above, and record the backup video.
 - Retake the screenshots marked "Retake" or "To do".

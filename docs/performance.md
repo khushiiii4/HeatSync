@@ -1,6 +1,6 @@
 # Deployment, scaling and performance results (Phase 12)
 
-Source: plan sections 3, 5.8, 12.3 (P-01 to P-03), 13.4 and roadmap Phase 12. Everything below was **run on the development machine** (Windows 11, Docker Desktop with 8 GB RAM and 12 CPUs), not on a lab server. No lab server details or credentials were available, so the deployment is proven on this machine and the lab URL step is listed under "Still needs the lab server".
+Source: plan sections 3, 5.8, 12.3 (P-01 to P-03), 13.4 and roadmap Phase 12. Everything below was **run on the development machine** (Windows 11, Docker Desktop with 8 GB RAM and 12 CPUs), not on a lab server. There is no lab server; the final deployment is Docker on one computer, and these numbers are **local-machine measurements**.
 
 ## 1. What was built
 
@@ -15,11 +15,11 @@ Source: plan sections 3, 5.8, 12.3 (P-01 to P-03), 13.4 and roadmap Phase 12. Ev
 | Flood generator | `POST /api/sim/flood` (simulator), `DELETE /api/telemetry/synthetic` (telemetry), both ADMIN at the gateway | Plan 8.2 endpoints that had been deferred. Synthetic racks are `SYN001...`, so real racks (R11 to R44) can never match the cleanup |
 | k6 and flood scripts | `load-tests/k6-read.js`, `load-tests/README.md`, `scripts/flood-test.sh` | |
 
-**How to deploy (from the repository root, with `.env` filled in from `infra/env/lab.env.example`):**
+**How to deploy (from the repository root, with `.env` filled in from `.env.example`):**
 
 ```
 docker compose --env-file .env -f infra/docker-compose.full.yml up -d --build
-# lab URL: http://<server>:${HTTP_PORT:-80}/     Eureka: http://127.0.0.1:8762     RabbitMQ UI: http://127.0.0.1:15673
+# dashboard: http://localhost:${HTTP_PORT:-80}/     Eureka: http://127.0.0.1:8762     RabbitMQ UI: http://127.0.0.1:15673
 docker compose --env-file .env -f infra/docker-compose.full.yml up -d --scale telemetry-service=3
 ```
 
@@ -72,8 +72,8 @@ With `--scale workload-service=2`, Eureka listed 2 instances and `scripts/e2e.sh
 
 ## 6. Not done / limits
 
-- **Still needs the lab server:** deploying there, the reachable lab URL, `docker compose ps` on that machine, and re-running P-01 and P-02 against it. Nothing was run on a lab server. Needed from you: the host, its RAM (plan for 5 to 6 GB free for the stack), Docker and Docker Compose on it, and a filled-in `.env`.
-- The numbers above are from one developer machine with Docker Desktop; they show the mechanism and relative scaling, not lab-server capacity.
+- **No lab server and no lab URL.** The plan's "lab URL" criterion is met by the Docker stack on your own computer (`http://localhost:<HTTP_PORT>/`). Nothing was run on a lab server. Plan for 5 to 6 GB of free memory for the stack.
+- The numbers above are from one developer machine with Docker Desktop; they show the mechanism and relative scaling, not the capacity of a different machine.
 - Port 80 was not used locally (`HTTP_PORT=8088`), because 80 and 8080 may be taken on this machine; the default in the compose file is 80.
 - Health checks are TCP port checks (the services expose no actuator health endpoint), so "healthy" means the port is open, which for Spring Boot is after the application context has started.
 - Telemetry is scaled with `deploy.replicas` and `--scale`; MySQL table creation by three instances starting at the same time worked in this run (no race observed) but was not stress-tested.

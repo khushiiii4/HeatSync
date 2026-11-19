@@ -14,9 +14,9 @@ Mirrors the checklist in plan section 15.9. An item is Done only when its listed
 | infra/mysql/init: six schemas (01-schemas.sql) and users/grants (02-users.sh) | Done | SHOW DATABASES shows all six; grants checked |
 | Each service user can reach only its own schema | Done | 6x6 matrix: 36/36 as expected (own schema allowed, others error 1142) |
 | RabbitMQ UI reachable on port 15672 | Done | HTTP 200; management API 3.13.7 answers with credentials, 401 without |
-| Repository pushed | Pending | Remote `origin` is configured (github.com/khushiiii4/HeatSync); nothing has been pushed from this branch |
+| Repository pushed | Done | Pushed to github.com/khushiiii4/HeatSync and merged into `main` by pull request (the first merge commit is "Merge Phase 0 setup and infrastructure into main") |
 
-Phase 0 is not closed: the branch has not been pushed or merged, and the full-teardown (`down -v`) re-initialisation was verified once only.
+Phase 0 is closed: it is merged into `main`. The full-teardown (`down -v`) re-initialisation of MySQL was verified once in Phase 0, and the Phase 12 Docker stack initialised an empty MySQL volume from the same scripts.
 
 ## Phase 1: Contracts, Eureka and Gateway
 
@@ -62,7 +62,7 @@ Phase 0 is not closed: the branch has not been pushed or merged, and the full-te
 
 ## Phases 9 to 13
 
-All Pending. Phases 4 to 8 are documented in their own sections below.
+Phases 4 to 13 are documented in their own sections of this file.
 
 ## Documentation
 
@@ -71,7 +71,7 @@ All Pending. Phases 4 to 8 are documented in their own sections below.
 | docs/diagrams/*.mmd (6 files) | Written, copied from plan sections 5.1, 5.3, 5.7 and 6B. Not render-tested |
 | docs/decision-log.md | Written |
 | docs/status.md | Written |
-| docs/architecture.md, api.md, events.md, database.md, demo-script.md, testing.md, performance.md, calibration.md | Placeholders only |
+| docs/architecture.md, api.md, events.md, database.md, demo-script.md, testing.md, performance.md, calibration.md, viva.md, demo-checklists.md, slides/ | Written (the Phase 0 placeholders were filled in later phases and in the release clean-up; `api.md` lists the endpoints found in the code) |
 
 ## Phase 4: Workload service and simulator integration
 
@@ -251,7 +251,7 @@ Source: plan section 12 and roadmap Phase 10 (decisions D-091, D-092). Full deta
 | `postman/thermogrid.postman_collection.json` (25 requests) and `scripts/demo.http` | Written, not run | No Newman or REST client here; collection parsed as valid JSON only |
 | `docs/testing.md` | Done | Real results, not-run list and deviations |
 | Scenarios 6 to 9, scaling (I-07), instance stop (I-08), k6 and flood | Not run | Phases 11 and 12 |
-| Branch merged | Pending | Local commit only; not pushed |
+| Branch merged | Done | Merged into `main` as pull request #11 |
 
 ## Phase 11: Failure testing
 
@@ -280,7 +280,7 @@ Source: plan sections 5.8, 12.3, 13.4 and roadmap Phase 12 (D-095 to D-097). Det
 | P-03 two workload instances | Done, partly | Traffic split 1.06 MB to 1.10 MB; no per-response instance id to show alternation directly |
 | Flood endpoints (D-096) and gateway bulkhead fix (D-095) | Done | New tests: flood generator and validation, synthetic cleanup, 60-concurrent-call gateway regression (fails without the fix) |
 | Full `./mvnw -B verify` after the Phase 12 code changes | Done | BUILD SUCCESS, 549 tests, 0 failures, 15 skipped (testing.md section 8) |
-| Deployment on a lab server, lab URL | **Not done** | Needs the lab host, its RAM, Docker and a filled-in .env |
+| Deployment on a lab server, lab URL | **Not applicable** | There is no lab server. The final deployment is Docker on the user's own computer (README); the local-machine results above are labelled as such |
 
 ## Phase 13: Demo preparation
 
@@ -295,5 +295,33 @@ Source: plan section 10 and roadmap Phase 13 (decision D-098). Prepared on 2026-
 | `docs/viva.md` (database per service, events, polling, proportional controller, plus a table of other questions) | Written | Every figure traced to status, testing, performance or the decision log |
 | `docs/demo-checklists.md` (screenshots, backup video, three rehearsals) | Written | Templates only: **no video recorded, no rehearsal performed, rehearsal table empty** |
 | README, `docs/architecture.md`, USER-RUN-GUIDE link updated | Done | |
-| Lab-server deployment | **Not done** | Pending; no lab URL exists. Nothing about it is claimed |
+| Lab-server deployment | **Not applicable** | There is no lab server; the final demonstration runs on Docker on one computer. No lab URL is claimed |
 | Backup video, three rehearsals under 10 minutes, retaking some screenshots | **Not done** | Manual tasks for the team, listed in `docs/demo-checklists.md` section E |
+
+## Final state (release readiness)
+
+Prepared on 2026-11-19. This section is the one-page summary; evidence for every item is in the phase sections above, `docs/testing.md` and `docs/performance.md`.
+
+**Completed and automated (evidence exists):**
+
+| Area | State |
+|------|-------|
+| Phases 0 to 10 (infrastructure, contracts, services, messaging, dashboard, security, integration tests) | Merged into `main` by pull requests #1 to #11 |
+| Phase 11 failure testing, Phase 12 Docker deployment and load tests, Phase 13 demo preparation, release clean-up | On the release branch, one pull request into `main` pending |
+| Java tests | `./mvnw -B verify`: BUILD SUCCESS, 549 tests, 0 failures, 15 skipped (the live-broker tests, run separately against a throwaway broker and passed) |
+| Frontend | 64 tests pass, production build succeeds |
+| End to end | 38 checks through the gateway (local services), 37 through nginx in Docker (the direct internal-port token check is skipped because Docker publishes no service port) |
+| Failure scenarios | Three consecutive full passes of 59 checks (`scripts/failure-tests.sh`) |
+| Docker deployment | `infra/docker-compose.full.yml` built and ran healthy on one computer with telemetry at 3 instances; **local-machine measurements only** |
+| Security | JWT and role rules at the gateway, internal token on `/internal/**`, no secrets committed (scanned) |
+
+**Manual tasks that are NOT done (they need a person):**
+
+- Three complete demo rehearsals under 10 minutes, recorded in `docs/demo-checklists.md` (none performed).
+- Backup demo video (not recorded).
+- Retake or capture the screenshots marked "Retake" or "To do" in `docs/demo-checklists.md`.
+- A final run of the Docker stack from a clean `docker compose down` on your computer, keeping `docker compose ps` as evidence.
+
+**Not applicable:** a lab server or lab URL. There is none; the final demonstration is the Docker stack on one computer.
+
+**Known limits (unchanged, by design):** simulator, scheduler and cooling controller are single instances (no leader election); no transactional outbox; everything is simulated; the rack maintenance-mode endpoint and a few other cut-list items are not implemented; one `LiveBrokerTest` group needs a throwaway RabbitMQ to run.

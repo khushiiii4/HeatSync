@@ -8,7 +8,7 @@ ThermoGrid is a software-simulated data center (4 cooling zones, 16 racks) built
 
 Phases 0 to 12 are implemented and Phase 13 (demo preparation) is written up: infrastructure, contracts, Eureka and the API gateway, topology, the simulator, telemetry with forecasting and alerts, the workload service, the scheduler (thermal-aware placement, migration, reconcile and HOLD mode), the cooling controller (proportional control, fault detection, fail-safe, modelled energy), RabbitMQ hardening, the React dashboard in `frontend/`, authentication and security at the gateway, integration and failure testing, and a Docker deployment with nginx, telemetry scaling and load tests.
 
-**Honest status.** The full stack has been deployed and measured with Docker **on a development machine only**. **Deployment to the lab server is still pending**, so there is no lab URL yet. The demo has been scripted but **not yet rehearsed by a person, and no backup video has been recorded** (see [docs/demo-checklists.md](docs/demo-checklists.md)). Automated evidence: 549 Java tests (0 failures, 15 live-broker tests run separately), 64 frontend tests, 38 end-to-end checks, three clean runs of the 59-check failure suite, k6 at 0.00 percent errors.
+**Honest status.** The full stack has been deployed and measured with Docker **on a development machine only**. **There is no lab server: the final demonstration runs on Docker on one computer** (see "Run the whole system with Docker"), and no lab URL exists or is claimed. The demo has been scripted but **not yet rehearsed by a person, and no backup video has been recorded** (see [docs/demo-checklists.md](docs/demo-checklists.md)). Automated evidence: 549 Java tests (0 failures, 15 live-broker tests run separately), 64 frontend tests, 38 end-to-end checks, three clean runs of the 59-check failure suite, k6 at 0.00 percent errors.
 
 See [docs/status.md](docs/status.md) for evidence per item and [docs/decision-log.md](docs/decision-log.md) for decisions. Start everything in the right order with `scripts/start-all.sh` (consumers before producers).
 
@@ -16,14 +16,82 @@ See [docs/status.md](docs/status.md) for evidence per item and [docs/decision-lo
 
 | I want to | Go to |
 |-----------|-------|
+| Understand the design (slide, diagrams, contracts) | [docs/architecture.md](docs/architecture.md) |
 | Run it for the first time, step by step | [docs/USER-RUN-GUIDE.md](docs/USER-RUN-GUIDE.md) |
-| Deploy the whole stack in Docker (nginx, telemetry x3) | `docker compose --env-file .env -f infra/docker-compose.full.yml up -d --build`; details and measured results in [docs/performance.md](docs/performance.md); env template `infra/env/lab.env.example` |
+| Deploy the whole stack in Docker (nginx, telemetry x3) | `docker compose --env-file .env -f infra/docker-compose.full.yml up -d --build`; details and measured results in [docs/performance.md](docs/performance.md); env template `.env.example` |
 | See what was tested and what was not | [docs/testing.md](docs/testing.md); `./mvnw -B verify`, `scripts/e2e.sh`, `scripts/failure-tests.sh` |
 | Load test | `load-tests/` (k6) and `scripts/flood-test.sh` |
 | Give the demo | [docs/demo-script.md](docs/demo-script.md) (about 10 minutes), [docs/slides/architecture.html](docs/slides/architecture.html) (one slide, PNG next to it) |
 | Reset between demo runs | `scripts/reset-demo.sh` (clears failures, removes all workloads, re-seeds, resets the simulator; about 10 to 20 s; keeps alert and migration history) |
 | Prepare for the viva | [docs/viva.md](docs/viva.md) |
 | Screenshots, backup video, three rehearsals | [docs/demo-checklists.md](docs/demo-checklists.md) |
+
+## Run the whole system with Docker (final demonstration)
+
+The final deployment is `infra/docker-compose.full.yml` on **one computer** (there is no lab server): MySQL, RabbitMQ, Eureka, the gateway, seven business services, telemetry-service at 3 instances, and nginx serving the dashboard. It uses its own Compose project (`thermogrid-full`), so it never touches the development containers started by `infra/docker-compose.yml`. Security is unchanged: JWT at the gateway, role rules, the internal token on `/internal/**`.
+
+**You need:** Docker Desktop with Compose v2; about 8 GB of memory given to Docker (the running stack used about 3.6 GB, its limits add up to about 6.3 GB); about 10 GB of free disk (the images are about 4 GB, the build cache is extra); internet for the first build; Git Bash (Windows) or any bash plus Node.js for the helper scripts (`reset-demo.sh`, `e2e.sh`, `failure-tests.sh`, `flood-test.sh`).
+
+### 1. Configure `.env`
+
+```
+cp .env.example .env            # PowerShell: Copy-Item .env.example .env
+```
+
+Open `.env` and replace every `CHANGE_ME`. Use letters and digits for passwords (no `$`, `#`, quotes or spaces). `THERMOGRID_JWT_SECRET` needs at least 32 characters; `docs/USER-RUN-GUIDE.md` section B2 shows how to generate secrets. If port 80 is already used on your computer, set `HTTP_PORT=8088`. `.env` is git-ignored: never commit it or paste it into chat. The `*_DB_PASSWORD` values are applied to MySQL only when its volume is created for the first time; changing them later needs `down -v` (see Troubleshooting).
+
+### 2. Build and start
+
+```
+docker compose --env-file .env -f infra/docker-compose.full.yml up -d --build
+docker compose --env-file .env -f infra/docker-compose.full.yml ps
+```
+
+The first build downloads base images and compiles every module, so allow 10 to 20 minutes (not timed precisely). In the local run, every container reported healthy about 4 minutes after `up`. Start order is enforced by health checks: MySQL and RabbitMQ, Eureka, the gateway and business services, the simulator last, nginx at the end.
+
+### 3. Open it
+
+| What | Address |
+|------|---------|
+| **Dashboard** (log in as `viewer`, `operator` or `admin` with the `SEED_*_PASSWORD` values from `.env`) | `http://localhost:<HTTP_PORT>/` (`http://localhost/` if you kept 80) |
+| API (same origin; nginx forwards `/api/` to the gateway) | `http://localhost:<HTTP_PORT>/api/...` |
+| Eureka dashboard (registered services, 3 telemetry instances) | `http://127.0.0.1:8762` (`EUREKA_PORT`) |
+| RabbitMQ management UI (queues; user and password are `RABBITMQ_USER` and `RABBITMQ_PASSWORD`) | `http://127.0.0.1:15673` (`RABBITMQ_UI_PORT`) |
+
+Only nginx is public. Inside the Docker network the services listen on their usual ports: eureka 8761, api-gateway 8080, auth 8081, topology 8082, simulator 8083, telemetry 8084, workload 8085, scheduler 8086, cooling-controller 8087; MySQL 3306 and RabbitMQ 5672 are not published to your computer. When the services run from Maven instead (`scripts/start-all.sh`), the gateway is on `GATEWAY_PORT` (default 8080) and the dev dashboard is `http://localhost:5173`.
+
+### 4. Seed and check
+
+```
+BASE_URL=http://localhost:8088 scripts/reset-demo.sh      # seeds the demo and waits for a calm state (use your HTTP_PORT)
+GATEWAY_URL=http://localhost:8088 scripts/e2e.sh          # optional: 37 end-to-end checks through nginx
+```
+
+### 5. Stop
+
+```
+docker compose --env-file .env -f infra/docker-compose.full.yml down       # stops and removes containers, KEEPS the data volumes
+docker compose --env-file .env -f infra/docker-compose.full.yml down -v    # also DELETES MySQL, RabbitMQ and simulator data: only for a fresh start
+```
+
+During the demo: `docker compose --env-file .env -f infra/docker-compose.full.yml stop scheduler-service` and `... start scheduler-service` (see `docs/demo-script.md`). To change the telemetry instance count: `... up -d --scale telemetry-service=1`.
+
+The load-test figures in `docs/performance.md` are **local-machine measurements** (Docker Desktop, 8 GB, 12 CPUs); they show the mechanism and relative scaling, not the capacity of another computer.
+
+### Docker troubleshooting
+
+| Symptom | Likely cause and fix |
+|---------|----------------------|
+| `required variable ... is missing a value` | A secret or password is missing in `.env`; the message names it. Always pass `--env-file .env` |
+| `port is already allocated` or nginx will not start | Port 80 is in use; set `HTTP_PORT=8088` in `.env` and run `up -d` again |
+| Containers restart or show `Killed` / exit 137 | Docker has too little memory; raise it in Docker Desktop, Settings, Resources (about 8 GB), or lower `TELEMETRY_REPLICAS` |
+| A service is `unhealthy` or `starting` for a long time | Look at its log: `docker compose --env-file .env -f infra/docker-compose.full.yml logs --tail 100 <service>`. MySQL must be healthy first; the first start takes the longest |
+| Dashboard opens but shows 502 or 503 | The gateway or a service is still starting; wait for `ps` to show healthy, then reload |
+| Login says the credentials were not accepted | Use the `SEED_*_PASSWORD` values from `.env`. After changing one, `docker compose --env-file .env -f infra/docker-compose.full.yml restart auth-service` |
+| MySQL `Access denied` after you changed a `*_DB_PASSWORD` | The MySQL volume was created with the old value. Restore the old value, or accept losing the data with `down -v` and start again |
+| Build fails while downloading dependencies | Network or proxy problem; run the same `up -d --build` again, the cache keeps finished layers |
+| Helper scripts fail with "command not found" or odd errors on Windows | Run them in Git Bash and make sure Node.js is installed (`node -v`) |
+| Docker stack and the Maven services at once are slow | Stop the Maven services with `scripts/stop-all.sh`; the dev MySQL and RabbitMQ containers can stay running |
 
 ## Modules
 
