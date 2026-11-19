@@ -338,6 +338,8 @@ An automated version of step 1 to 5 across all three roles exists: `cd frontend;
 
 ## G. Dashboard demonstration
 
+> For the timed, repeatable 10-minute demo with reset script, slide and viva notes, use [demo-script.md](demo-script.md). This section is the longer walk-through of each page.
+
 Sign in as `admin` for the whole demo. Do the steps in order. Wait about 30 seconds after seeding before starting so the first forecasts exist.
 
 **Honesty note.** What I actually ran in Phase 9, on this machine, through the secured gateway: login for all roles; the role checks in section F; seeding; a Z2 `COOLING_DEGRADED` injection as `operator` (the API returned the failure with `injectedBy: operator`, a predicted `WATCH` alert for R21 appeared within 40 seconds and a scheduler placement decision was recorded), then clearing it; the browser checks of `verify-roles.mjs`. The full scripted scenarios in steps 3 to 7 (migrations, cooling climb, Z3 failure, scheduler stop and recovery) were exercised in earlier phases (7 and 8, see docs/status.md); they were **not** re-run end to end after authentication was added, and the screenshots in `docs/screenshots/` are from Phase 8. Treat steps 3 to 7 as the intended behaviour and report anything that differs.

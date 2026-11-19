@@ -7,7 +7,7 @@ import org.springframework.http.HttpMethod;
  * <ul>
  *   <li>VIEWER: every read (GET, HEAD).</li>
  *   <li>OPERATOR: VIEWER plus every operational write (workloads, scheduler, cooling mode, failure injection).</li>
- *   <li>ADMIN: OPERATOR plus simulator control and demo seeding.</li>
+ *   <li>ADMIN: OPERATOR plus simulator control, the flood generator, synthetic-data cleanup and demo seeding.</li>
  * </ul>
  * Anything that is not a plain read needs at least OPERATOR, so a new write endpoint is never open by accident.
  */
@@ -24,7 +24,10 @@ public final class RolePolicy {
     public static Role minimumRole(HttpMethod method, String path) {
         String p = stripTrailingSlash(path);
         if (HttpMethod.GET.equals(method) || HttpMethod.HEAD.equals(method)) return Role.VIEWER;
-        if (p.equals("/api/sim/control") || p.equals("/api/workloads/seed-demo")) return Role.ADMIN;
+        if (p.equals("/api/sim/control") || p.equals("/api/sim/flood") || p.equals("/api/workloads/seed-demo")
+                || p.equals("/api/telemetry/synthetic")) {
+            return Role.ADMIN;
+        }
         return Role.OPERATOR;
     }
 

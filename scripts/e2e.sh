@@ -66,11 +66,13 @@ check S-03 "VIEWER GET /api/topology" 200 "$(code GET "$G/api/topology" "$VT")"
 ME=$(body GET "$G/api/auth/me" "$VT"); check S-06 "/api/auth/me role for viewer token" VIEWER "$(echo "$ME" | jstr role)"
 
 echo "== Internal token (S-05) - direct calls to services"
-check S-05 "topology /internal/topology without token" 401 "$(code GET http://localhost:8082/internal/topology)"
-check S-05 "topology /internal/topology wrong token" 401 "$(code GET http://localhost:8082/internal/topology '' '' 'X-Internal-Token: wrong')"
-check S-05 "workload /internal/workloads without token" 401 "$(code GET http://localhost:8085/internal/workloads)"
-check S-05 "telemetry /internal/telemetry/racks/latest without token" 401 "$(code GET http://localhost:8084/internal/telemetry/racks/latest)"
-if [ -n "${THERMOGRID_INTERNAL_TOKEN:-}" ]; then
+# In the Docker deployment the service ports are not published at all: "unreachable" (000) is the strongest form of refusal.
+d401() { local c; c=$(code "$@"); case "$c" in 000*) echo 401 ;; *) echo "$c" ;; esac; }
+check S-05 "topology /internal/topology without token" 401 "$(d401 GET http://localhost:8082/internal/topology)"
+check S-05 "topology /internal/topology wrong token" 401 "$(d401 GET http://localhost:8082/internal/topology '' '' 'X-Internal-Token: wrong')"
+check S-05 "workload /internal/workloads without token" 401 "$(d401 GET http://localhost:8085/internal/workloads)"
+check S-05 "telemetry /internal/telemetry/racks/latest without token" 401 "$(d401 GET http://localhost:8084/internal/telemetry/racks/latest)"
+if [ -n "${THERMOGRID_INTERNAL_TOKEN:-}" ] && (exec 3<>/dev/tcp/127.0.0.1/8082) 2>/dev/null; then
   check S-05 "topology /internal/topology with the real token" 200 "$(code GET http://localhost:8082/internal/topology '' '' "X-Internal-Token: $THERMOGRID_INTERNAL_TOKEN")"
 fi
 

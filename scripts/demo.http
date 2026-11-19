@@ -55,12 +55,12 @@ Authorization: Bearer {{adminToken}}
 GET {{gateway}}/api/cooling/units
 Authorization: Bearer {{adminToken}}
 
-### 10. Scenario 2: degrade cooling in Z2 (efficiency 0.25)
+### 10. Scenario 2: degrade cooling in Z2 (efficiency 0.15, see decision D-093)
 POST {{gateway}}/api/sim/failures
 Authorization: Bearer {{adminToken}}
 Content-Type: application/json
 
-{ "type": "COOLING_DEGRADED", "targetId": "Z2", "param": 0.25, "durationSec": 0 }
+{ "type": "COOLING_DEGRADED", "targetId": "Z2", "param": 0.15, "durationSec": 0 }
 
 ### 11. Active failures (copy an id for the DELETE below)
 GET {{gateway}}/api/sim/failures?active=true

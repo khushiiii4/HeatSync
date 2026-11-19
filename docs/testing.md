@@ -89,3 +89,33 @@ These cover dead-lettering after 3 attempts (I-04), malformed JSON dead-lettered
 - `scripts/e2e.sh` uses plain curl and sed instead of jq (jq is not installed).
 - Test class names differ from plan section 12.2 in places (the services were built with their own names); the required behaviours of section 12.3 are covered, with the exceptions listed above.
 - One production query was changed in Phase 10 (D-091). No other source file outside tests, scripts and docs changed.
+
+## 7. Failure testing (Phase 11): `scripts/failure-tests.sh`
+
+Drives the running stack through the gateway. Every scenario starts from a reset (failures cleared, all workloads removed, simulator RESET, demo seed re-applied) and asserts the documented behaviour with a time limit. Run: `scripts/failure-tests.sh` (`SCENARIOS="s6 s9"` for a subset, `SKIP_BROKER_RESTART=1` to skip F-03). Needs node for JSON parsing.
+
+**Result: three consecutive full passes, each 59 passed, 0 failed** (2026-11-19, local stack, gateway on 18080).
+
+| Scenario (plan section 10 / 12.3) | What is asserted | Measured over 3 passes |
+|---|---|---|
+| 1 Normal operation | 16 racks NORMAL, no alerts, nothing pending, cooling at or below 60 percent, all services UP | Pass x3 |
+| 2 to 5 Degraded cooling in Z2 | Z2 alert WARNING or CRITICAL; a PREDICTED alert; Z2 output at least 90; a THERMAL migration applied; after clearing, all alerts cleared and Z2 output at most 60 | Alert after 51, 44, 63 s; migration at once; alerts cleared 19 to 21 s after clearing |
+| 6 Cooling unit failure Z3 | Z3 FAULT; the other three zones at floor and output of at least 60; scheduler sees FAULT; Z3 drained; no CRITICAL alert; recovery to OK and floors back to 30 | FAULT after 5 s; floors after 3 to 5 s; Z3 drained within 1 s of the check (moves already done); no CRITICAL |
+| 7 Scheduler failure | Platform shows SCHEDULER-SERVICE DOWN; Z2 cooling stays AUTO at 90 percent or more; alerts stay active; telemetry keeps updating; a new workload stays PENDING | DOWN after 23, 24, 21 s |
+| 8 Scheduler recovery | Service UP again; pending workload placed; pending 0; alerts clear once the failure is cleared | Placed within 0 to 1 s of UP |
+| 9 Telemetry failure | TELEMETRY-SERVICE DOWN; scheduler enters HOLD; `q.telemetry.rack-readings` backlog above 100; cooling keeps changing; a new workload still placed in HOLD; after restart the backlog drains below 50, scheduler back to NORMAL, readings under 10 s old; dead-letter count unchanged | HOLD within 1 s of the check; backlog drained 8 to 11 s after telemetry was UP |
+| F-02 Sensor dropout R11 | R11 STALE; two new workloads not placed on R11; R11 back to OK | STALE after 12, 12, 10 s |
+| F-03 RabbitMQ restart | Fresh readings resume with no service restarted; cooling state flows; a new workload is placed; dead-letter count unchanged | Readings back after 3 to 6 s |
+
+**First full run (before the calibration fix): 57 passed, 2 failed.** S3 and S4 failed because scenario 2 at efficiency 0.25 never raised a WARNING with the controller running (peak Z2 about 31 C). Measured 0.20 (32.8 C, still WATCH) and 0.15 (PREDICTED WARNING, migration); 0.15 is now the Control Room preset and the script default (D-093). Everything else passed in that run, and the three final passes above used the final script.
+
+**Deviations and limits**
+- Scenario 2 uses remaining efficiency 0.15 instead of the plan's 0.25 (D-093). The API still accepts 0.25.
+- I-07 (three telemetry instances) and I-08 as a separate case are not covered here: scaling belongs to Phase 12; instance loss was exercised by scenarios 7 and 9.
+- The runs are on one machine with the dev MySQL and RabbitMQ containers; F-03 restarted the dev RabbitMQ container.
+- "No acknowledged message lost" was checked only as: backlog drains, readings resume and the dead-letter count did not change. A row-by-row reading count was not done.
+- The Control Room buttons and the browser stale badges were not re-checked in a browser in Phase 11.
+
+## 8. Phase 12 code changes: Maven verification
+
+After adding the flood generator, the synthetic cleanup endpoint, the gateway role rules and the gateway bulkhead fix, `./mvnw -B verify` was run again on the whole project: **BUILD SUCCESS, 549 tests, 0 failures, 0 errors, 15 skipped** (the same 15 live-broker tests, not re-run here). The 5 new tests: `FloodTest` (3: count, unique keys and SYN prefix; failed publishes counted; request validation and 409), `SyntheticCleanupTest` (1: removes only SYN racks), and `GatewayHttpBehaviourTest.manyConcurrentCallsThroughACircuitBreakerRouteAreNotRejected` (60 concurrent calls; confirmed to FAIL with the bulkhead enabled and pass with it disabled). `GatewaySecurityTest` also asserts the new ADMIN-only paths. Frontend tests were not re-run in Phase 12 (no frontend source changed since Phase 11, where all 64 passed). Docker deployment, k6 and flood results are in `docs/performance.md`.

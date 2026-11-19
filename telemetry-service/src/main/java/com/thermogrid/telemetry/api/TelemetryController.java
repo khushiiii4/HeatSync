@@ -1,7 +1,9 @@
 package com.thermogrid.telemetry.api;
 
+import com.thermogrid.telemetry.service.SyntheticDataService;
 import com.thermogrid.telemetry.service.TelemetryQueryService;
 import java.util.List;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -12,8 +14,10 @@ import org.springframework.web.bind.annotation.RestController;
 public class TelemetryController {
 
     private final TelemetryQueryService queries;
+    private final SyntheticDataService synthetic;
 
-    public TelemetryController(TelemetryQueryService queries) {
+    public TelemetryController(TelemetryQueryService queries, SyntheticDataService synthetic) {
+        this.synthetic = synthetic;
         this.queries = queries;
     }
 
@@ -26,6 +30,12 @@ public class TelemetryController {
     public Dtos.History history(@PathVariable String rackId,
                                 @RequestParam(name = "minutes", defaultValue = "10") int minutes) {
         return queries.history(rackId, minutes);
+    }
+
+    /** ADMIN only (gateway rule): removes racks and readings created by the simulator flood generator. */
+    @DeleteMapping("/api/telemetry/synthetic")
+    public SyntheticDataService.Removed removeSynthetic() {
+        return synthetic.removeAll();
     }
 
     @GetMapping("/api/telemetry/zones/latest")

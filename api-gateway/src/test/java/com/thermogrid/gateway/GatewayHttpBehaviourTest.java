@@ -17,6 +17,14 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import com.sun.net.httpserver.HttpServer;
+import java.net.InetSocketAddress;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import reactor.core.publisher.Flux;
 
 /** A test-only route points at a closed port to exercise the circuit-breaker fallback. */
@@ -30,11 +38,48 @@ class GatewayHttpBehaviourTest {
     @TestConfiguration
     static class DeadRoute {
         @Bean
+        RouteLocator slowRoute(RouteLocatorBuilder builder) {
+            return builder.routes().route("slow-route", r -> r.path("/api/slow/**")
+                    .filters(f -> f.circuitBreaker(c -> c.setName("SLOW-SERVICE")
+                            .setFallbackUri("forward:/fallback/SLOW-SERVICE")))
+                    .uri("http://localhost:" + SLOW.getAddress().getPort())).build();
+        }
+
+        @Bean
         RouteLocator deadRoute(RouteLocatorBuilder builder) {
             return builder.routes().route("dead-route", r -> r.path("/api/dead/**")
                     .filters(f -> f.circuitBreaker(c -> c.setName("DEAD-SERVICE")
                             .setFallbackUri("forward:/fallback/DEAD-SERVICE")))
                     .uri("http://localhost:1")).build();
+        }
+    }
+
+    /** A downstream that answers after 300 ms, to hold many calls open at the same time. */
+    static final HttpServer SLOW = startSlowServer();
+
+    static HttpServer startSlowServer() {
+        try {
+            HttpServer s = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
+            s.setExecutor(Executors.newFixedThreadPool(100, r -> {
+                Thread t = new Thread(r, "slow-stub");
+                t.setDaemon(true);
+                return t;
+            }));
+            s.createContext("/", ex -> {
+                try {
+                    Thread.sleep(300);
+                } catch (InterruptedException ignored) {
+                    Thread.currentThread().interrupt();
+                }
+                byte[] body = "ok".getBytes();
+                ex.sendResponseHeaders(200, body.length);
+                ex.getResponseBody().write(body);
+                ex.close();
+            });
+            s.start();
+            return s;
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException(e);
         }
     }
 
@@ -65,6 +110,26 @@ class GatewayHttpBehaviourTest {
                 .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "GET")
                 .exchange()
                 .expectStatus().isForbidden();
+    }
+
+    @Test
+    void manyConcurrentCallsThroughACircuitBreakerRouteAreNotRejected() throws Exception {
+        // Regression (Phase 12): the default Resilience4j bulkhead allowed only 25 concurrent calls per route; 60 held
+        // open at once produced BulkheadFullException, an opened circuit and 503s for everyone.
+        ExecutorService pool = Executors.newFixedThreadPool(60);
+        try {
+            List<Future<Integer>> results = new ArrayList<>();
+            for (int i = 0; i < 60; i++) {
+                Callable<Integer> call = () -> client.get().uri("/api/slow/x").exchange().expectBody().returnResult()
+                        .getStatus().value();
+                results.add(pool.submit(call));
+            }
+            for (Future<Integer> r : results) {
+                assertThat(r.get()).isEqualTo(200);
+            }
+        } finally {
+            pool.shutdownNow();
+        }
     }
 
     @Test

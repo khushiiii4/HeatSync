@@ -174,12 +174,16 @@ class GatewaySecurityTest {
         assertThat(status(HttpMethod.POST, "/api/sim/failures", bearer("OPERATOR"))).isNotIn(401, 403);
         assertThat(status(HttpMethod.POST, "/api/sim/control", bearer("OPERATOR"))).isEqualTo(403);
         assertThat(status(HttpMethod.POST, "/api/workloads/seed-demo", bearer("OPERATOR"))).isEqualTo(403);
+        assertThat(status(HttpMethod.POST, "/api/sim/flood", bearer("OPERATOR"))).isEqualTo(403);
+        assertThat(status(HttpMethod.DELETE, "/api/telemetry/synthetic", bearer("OPERATOR"))).isEqualTo(403);
     }
 
     @Test
     void adminCanDoEverything() {
         assertThat(status(HttpMethod.POST, "/api/sim/control", bearer("ADMIN"))).isNotIn(401, 403);
         assertThat(status(HttpMethod.POST, "/api/workloads/seed-demo", bearer("ADMIN"))).isNotIn(401, 403);
+        assertThat(status(HttpMethod.POST, "/api/sim/flood", bearer("ADMIN"))).isNotIn(401, 403);
+        assertThat(status(HttpMethod.DELETE, "/api/telemetry/synthetic", bearer("ADMIN"))).isNotIn(401, 403);
         assertThat(status(HttpMethod.POST, "/api/workloads", bearer("ADMIN"))).isNotIn(401, 403);
         assertThat(status(HttpMethod.GET, "/api/topology", bearer("ADMIN"))).isNotIn(401, 403);
     }
