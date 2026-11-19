@@ -1,6 +1,6 @@
 # Status register
 
-Mirrors the checklist in plan section 15.9. An item is Done only when its listed test was run and passed (plan rule 10). Last updated: 2026-11-19, Phase 12 (deployment and load testing).
+Mirrors the checklist in plan section 15.9. An item is Done only when its listed test was run and passed (plan rule 10). Last updated: 2026-11-19, Phase 13 (demo preparation).
 
 ## Phase 0: Environment and repository setup
 
@@ -281,3 +281,19 @@ Source: plan sections 5.8, 12.3, 13.4 and roadmap Phase 12 (D-095 to D-097). Det
 | Flood endpoints (D-096) and gateway bulkhead fix (D-095) | Done | New tests: flood generator and validation, synthetic cleanup, 60-concurrent-call gateway regression (fails without the fix) |
 | Full `./mvnw -B verify` after the Phase 12 code changes | Done | BUILD SUCCESS, 549 tests, 0 failures, 15 skipped (testing.md section 8) |
 | Deployment on a lab server, lab URL | **Not done** | Needs the lab host, its RAM, Docker and a filled-in .env |
+
+## Phase 13: Demo preparation
+
+Source: plan section 10 and roadmap Phase 13 (decision D-098). Prepared on 2026-11-19. **Written, not rehearsed.**
+
+| Item | Status | Evidence / note |
+|------|--------|-----------------|
+| `docs/demo-script.md` (about 10 minutes, parts 1 to 8) | Written | Timings are taken from the automated Phase 11 runs and the Phase 13 restart and reset measurements, not from a rehearsed live demo |
+| `scripts/reset-demo.sh` | Done and run | `--dry-run` worked; refused correctly with the scheduler stopped; real reset from a state with 2 failures and 4 active alerts took 16 s, from a calm state 9 s (twice), each ending with 16 racks NORMAL, no alerts, scheduler NORMAL, 36 workloads (720 CPU units) |
+| Scheduler and telemetry restart time (for the script) | Measured | About 25 s and 24 s through `start-all.sh`, local services. Docker restart time not measured |
+| Architecture slide `docs/slides/architecture.html` and `.png` | Done | Rendered with headless Chrome and checked by eye after fixing an overlapping subtitle |
+| `docs/viva.md` (database per service, events, polling, proportional controller, plus a table of other questions) | Written | Every figure traced to status, testing, performance or the decision log |
+| `docs/demo-checklists.md` (screenshots, backup video, three rehearsals) | Written | Templates only: **no video recorded, no rehearsal performed, rehearsal table empty** |
+| README, `docs/architecture.md`, USER-RUN-GUIDE link updated | Done | |
+| Lab-server deployment | **Not done** | Pending; no lab URL exists. Nothing about it is claimed |
+| Backup video, three rehearsals under 10 minutes, retaking some screenshots | **Not done** | Manual tasks for the team, listed in `docs/demo-checklists.md` section E |

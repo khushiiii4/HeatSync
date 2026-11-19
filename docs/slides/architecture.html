@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ThermoGrid architecture slide</title>
+<!-- One 16:9 slide (1280 x 720). Open in a browser and print or export to PDF, or use docs/slides/architecture.png.
+     Self-contained: no network, no external fonts. Numbers come from the plan and from docs/status.md. -->
+<style>
+  @page { size: 1280px 720px; margin: 0; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #fff; font-family: "Segoe UI", Arial, sans-serif; color: #1b2430; }
+  .slide { width: 1280px; height: 720px; padding: 28px 36px; position: relative; overflow: hidden; }
+  h1 { margin: 0; font-size: 34px; letter-spacing: -0.5px; }
+  .sub { margin: 4px 0 0; font-size: 16px; color: #4a5565; }
+  .main { position: absolute; top: 112px; left: 36px; width: 880px; }
+  .side { position: absolute; top: 112px; left: 944px; width: 300px; }
+  svg text { font-family: "Segoe UI", Arial, sans-serif; }
+  .card { border: 1px solid #d5dbe3; border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; background: #f7f9fb; }
+  .card h2 { margin: 0 0 6px; font-size: 15px; text-transform: uppercase; letter-spacing: .6px; color: #2b5fa8; }
+  .card ul { margin: 0; padding-left: 18px; font-size: 15px; line-height: 1.38; }
+  .foot { position: absolute; bottom: 14px; left: 36px; right: 36px; font-size: 13px; color: #5c6675; display: flex; justify-content: space-between; }
+</style>
+</head>
+<body>
+<div class="slide">
+  <h1>ThermoGrid: a closed control loop for a simulated data center</h1>
+  <p class="sub">Services sense rack heat, predict hotspots 60 s ahead, move workloads away and tune cooling. Each decision changes the next reading.</p>
+
+  <div class="main">
+  <svg viewBox="0 0 880 560" width="880" height="560" role="img" aria-label="Architecture diagram">
+    <defs>
+      <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#46556b"/></marker>
+    </defs>
+
+    <!-- entry layer -->
+    <rect x="0" y="0" width="150" height="56" rx="8" fill="#e8f0fb" stroke="#2b5fa8"/>
+    <text x="75" y="24" text-anchor="middle" font-size="15" font-weight="600">React dashboard</text>
+    <text x="75" y="43" text-anchor="middle" font-size="12" fill="#4a5565">polls every 2 to 5 s</text>
+    <line x1="150" y1="28" x2="206" y2="28" stroke="#46556b" stroke-width="2" marker-end="url(#a)"/>
+    <rect x="210" y="0" width="140" height="56" rx="8" fill="#e8f0fb" stroke="#2b5fa8"/>
+    <text x="280" y="24" text-anchor="middle" font-size="15" font-weight="600">nginx :80</text>
+    <text x="280" y="43" text-anchor="middle" font-size="12" fill="#4a5565">serves UI, proxies /api</text>
+    <line x1="350" y1="28" x2="406" y2="28" stroke="#46556b" stroke-width="2" marker-end="url(#a)"/>
+    <rect x="410" y="0" width="250" height="56" rx="8" fill="#fff3dd" stroke="#c4861a"/>
+    <text x="535" y="24" text-anchor="middle" font-size="15" font-weight="600">api-gateway :8080</text>
+    <text x="535" y="43" text-anchor="middle" font-size="12" fill="#4a5565">JWT, roles, 503 fallback, no /internal</text>
+    <rect x="720" y="0" width="160" height="56" rx="8" fill="#eef7ee" stroke="#3f8a47" stroke-dasharray="5 3"/>
+    <text x="800" y="24" text-anchor="middle" font-size="15" font-weight="600">Eureka :8761</text>
+    <text x="800" y="43" text-anchor="middle" font-size="12" fill="#4a5565">service discovery (lb://)</text>
+    <line x1="660" y1="28" x2="716" y2="28" stroke="#3f8a47" stroke-width="1.5" stroke-dasharray="5 3" marker-end="url(#a)"/>
+    <line x1="535" y1="56" x2="535" y2="110" stroke="#46556b" stroke-width="2" marker-end="url(#a)"/><text x="548" y="90" font-size="12" fill="#4a5565">routes to every service (lb://)</text>
+
+    <!-- services -->
+    <text x="0" y="104" font-size="13" fill="#4a5565" font-weight="600">SEVEN BUSINESS SERVICES (each owns its data)</text>
+    <g font-size="13" font-weight="600" text-anchor="middle">
+      <rect x="0"   y="114" width="104" height="58" rx="8" fill="#fff" stroke="#46556b"/><text x="52"  y="138">auth</text><text x="52" y="157" font-size="11" font-weight="400" fill="#4a5565">:8081 JWT login</text>
+      <rect x="112" y="114" width="104" height="58" rx="8" fill="#fff" stroke="#46556b"/><text x="164" y="138">topology</text><text x="164" y="157" font-size="11" font-weight="400" fill="#4a5565">:8082 zones, racks</text>
+      <rect x="224" y="114" width="104" height="58" rx="8" fill="#fff" stroke="#46556b"/><text x="276" y="138">workload</text><text x="276" y="157" font-size="11" font-weight="400" fill="#4a5565">:8085 record of jobs</text>
+      <rect x="336" y="114" width="120" height="58" rx="8" fill="#e8f0fb" stroke="#2b5fa8"/><text x="396" y="138">simulator</text><text x="396" y="157" font-size="11" font-weight="400" fill="#4a5565">:8083 physics, failures</text>
+      <rect x="464" y="114" width="136" height="58" rx="8" fill="#e8f0fb" stroke="#2b5fa8"/><text x="532" y="138">telemetry x1 to 3</text><text x="532" y="157" font-size="11" font-weight="400" fill="#4a5565">:8084 forecast, alerts</text>
+      <rect x="608" y="114" width="128" height="58" rx="8" fill="#e8f0fb" stroke="#2b5fa8"/><text x="672" y="138">scheduler</text><text x="672" y="157" font-size="11" font-weight="400" fill="#4a5565">:8086 place, migrate</text>
+      <rect x="744" y="114" width="136" height="58" rx="8" fill="#e8f0fb" stroke="#2b5fa8"/><text x="812" y="138">cooling controller</text><text x="812" y="157" font-size="11" font-weight="400" fill="#4a5565">:8087 P control</text>
+    </g>
+
+    <!-- RabbitMQ -->
+    <rect x="0" y="218" width="880" height="64" rx="10" fill="#fdecef" stroke="#c0394d"/>
+    <text x="440" y="244" text-anchor="middle" font-size="16" font-weight="600">RabbitMQ topic exchange "thermogrid.events"</text>
+    <text x="440" y="266" text-anchor="middle" font-size="13" fill="#4a5565">9 routing keys, consumer-owned durable queues, retry x3 then dead-letter queue, events carry absolute state</text>
+    <g stroke="#c0394d" stroke-width="2" marker-end="url(#a)" marker-start="url(#a)">
+      <line x1="396" y1="172" x2="396" y2="218"/><line x1="532" y1="172" x2="532" y2="218"/>
+      <line x1="672" y1="172" x2="672" y2="218"/><line x1="812" y1="172" x2="812" y2="218"/><line x1="276" y1="172" x2="276" y2="218"/>
+    </g>
+    <text x="164" y="204" text-anchor="middle" font-size="11" fill="#4a5565">REST only</text>
+
+    <!-- databases -->
+    <text x="0" y="318" font-size="13" fill="#4a5565" font-weight="600">DATABASE PER SERVICE (one MySQL schema and one user each; the simulator keeps an embedded H2 file)</text>
+    <g font-size="12" text-anchor="middle">
+      <rect x="0"   y="328" width="130" height="34" rx="6" fill="#f0f0f5" stroke="#7b7b94"/><text x="65"  y="350">auth_db</text>
+      <rect x="140" y="328" width="130" height="34" rx="6" fill="#f0f0f5" stroke="#7b7b94"/><text x="205" y="350">topology_db</text>
+      <rect x="280" y="328" width="130" height="34" rx="6" fill="#f0f0f5" stroke="#7b7b94"/><text x="345" y="350">workload_db</text>
+      <rect x="420" y="328" width="130" height="34" rx="6" fill="#f0f0f5" stroke="#7b7b94"/><text x="485" y="350">telemetry_db</text>
+      <rect x="560" y="328" width="130" height="34" rx="6" fill="#f0f0f5" stroke="#7b7b94"/><text x="625" y="350">scheduler_db</text>
+      <rect x="700" y="328" width="90"  height="34" rx="6" fill="#f0f0f5" stroke="#7b7b94"/><text x="745" y="350">cooling_db</text>
+      <rect x="800" y="328" width="80"  height="34" rx="6" fill="#f0f0f5" stroke="#7b7b94" stroke-dasharray="4 3"/><text x="840" y="350">H2 simdb</text>
+    </g>
+
+    <!-- loop -->
+    <rect x="0" y="388" width="880" height="170" rx="10" fill="#f7f9fb" stroke="#d5dbe3"/>
+    <text x="16" y="414" font-size="15" font-weight="700" fill="#2b5fa8">THE CLOSED LOOP (what the demo shows)</text>
+    <g font-size="14">
+      <text x="16" y="442"><tspan font-weight="700">1</tspan>  simulator advances the thermal model every 2 s and publishes a reading per rack and zone</text>
+      <text x="16" y="466"><tspan font-weight="700">2</tspan>  telemetry smooths each rack (damped Holt), forecasts 60 s ahead, raises WATCH / WARNING / CRITICAL alerts</text>
+      <text x="16" y="490"><tspan font-weight="700">3</tspan>  cooling controller raises that zone's output at once (proportional control plus alert feed-forward)</text>
+      <text x="16" y="514"><tspan font-weight="700">4</tspan>  scheduler moves low-priority work to cool racks with spare capacity; workload-service applies it</text>
+      <text x="16" y="538"><tspan font-weight="700">5</tspan>  the simulator sees the new load and cooling, the rack cools, the alert clears, the boost is released</text>
+    </g>
+  </svg>
+  </div>
+
+  <div class="side">
+    <div class="card"><h2>The simulated plant</h2>
+      <ul><li>4 cooling zones, 16 racks (4 x 4)</li><li>2 s tick, 60 s forecast horizon</li><li>WATCH 30, WARNING 34, CRITICAL 38 C</li><li>About 36 demo workloads</li></ul></div>
+    <div class="card"><h2>Design choices</h2>
+      <ul><li>Each service owns its data; others use REST or events</li><li>Services fail independently, the rest keep working</li><li>Dashboard polls, so each panel fails alone</li><li>Security only at the gateway, plus an internal token</li></ul></div>
+    <div class="card"><h2>Evidence so far</h2>
+      <ul><li>549 automated tests, 0 failures</li><li>Failure scenarios: 3 clean runs of 59 checks</li><li>k6: 0.00 % errors, p95 21 ms (local Docker)</li></ul></div>
+  </div>
+
+  <div class="foot"><span>All hardware is simulated; no machine learning. Lab-server deployment: pending.</span><span>ThermoGrid, Phase 13</span></div>
+</div>
+</body>
+</html>
